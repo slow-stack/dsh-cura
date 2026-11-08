@@ -11,7 +11,7 @@
 QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留）
                     ▲
                     │ 贴附（agents.get → systemPrompt.section）
-        dsh-cura（本插件）：回复规则 / 人设 / 语料 / 日记调度
+        dsh-cura（本插件）：回复规则 / 人设 / 语料 / 健康与周期关怀
                     │
                     ├─ ctx.llm.stream（模型随 DSH 设置走，如 xdpool）
                     ├─ 管家工具：外部 MCP（瑞幸/高德…）挂进本会话（lib/butler.js）
@@ -34,7 +34,6 @@ QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留�
 | 语音合成助手 | ✅ | `say.ps1`：edge-tts（自然，云）失败自动换 Windows 离线 SAPI（稳定，本地）。agent 用 shell 调它生成音频，再用 `qq_send_voice`（dsh-onebot 自带）发送——职责不重叠 |
 | STT 包装器 | ✅ | `stt-whisper.py`：faster-whisper 包装，适配 dsh-onebot 的 `custom` STT 引擎（`{file}`/`{out}` 模板） |
 | 语音通话引擎托管 | 🅿️ 搁置 | 托管一个 Python 通话引擎（自动接听/对话/挂断，基于 [KoishiRTC](https://github.com/Touch-Night/KoishiRTC) 系桥）。QQ 通话里"对方声音回放路由"在 Windows 上暂无可靠解（上游待验证），代码完整保留，随时可复活 |
-| 每日日记 | 🚧 默认关 | schedule 服务定时把日记指令投递进 QQ 会话（代码已就绪，`diaryEnabled` 打开即用） |
 
 ## 安装（手动，Windows + DSH 桌面版）
 
@@ -70,7 +69,7 @@ QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留�
     engineDir: D:\path\to\qq-call-engine               # 可选（托管通话引擎时）
 ```
 
-其余字段（回复规则、人设、语料目录、场景、语音条模式、日记）都在 Config schema 里，重启后在 DSH 插件设置页可视化修改；也可以直接改本仓库的 `cordis.patch.yml` 默认值。
+其余字段（回复规则、人设、语料目录、场景、语音条模式）都在 Config schema 里，重启后在 DSH 插件设置页可视化修改；也可以直接改本仓库的 `cordis.patch.yml` 默认值。
 
 ## 组件说明
 
@@ -124,7 +123,7 @@ sttArgs: ["D:/dsh-cura/stt-whisper.py", "--file", "{file}", "--out", "{out}"]
 - [x] 情境→表达规则库：LLM 从聊天记录抽取 `{"situation","style"}` 规则入库，按情境检索注入（MaiBot 1.x 模式）
 - [ ] 回复意愿门控：数值意愿 + 一次 yes/no "读空气"调用，决定是否回复（MaiBot 0.6 公式）
 - [ ] dsh-mneme 深度联动：QQ 会话独立记忆域（agentPreset scope 隔离）
-- [ ] 每日日记实测与"主观记忆碎片"回收
+- [ ] 手机健康数据导入：Apple Health export.zip / Health Connect 导出文件解析入库（本机解析，不上传）
 - [ ] DSH 设置页 Remote 面板（照 dsh-onebot settings-remote 契约）
 - [ ] QQ 语音通话里的语音导航：amap MCP 算路 + TTS 逐步播报（过渡方案 `say_aloud` 即可做）；真正的通话内导航等通话引擎 RX 复活后再做
 - [ ] 管家面板页：butlerServers 可视化编辑 + 各 server 连接状态展示（当前先靠 Config + 日志）
@@ -136,6 +135,7 @@ sttArgs: ["D:/dsh-cura/stt-whisper.py", "--file", "{file}", "--out", "{out}"]
 - [ClaudiaGardner/maibot-qq-voice-call](https://github.com/ClaudiaGardner/maibot-qq-voice-call) —— AVSDK Host 的原始实现
 - [NapNeko/dsh-onebot-qq](https://github.com/NapNeko/dsh-onebot-qq) —— QQ 通道层（本插件贴附的宿主）
 - [MaiM-with-u/MaiBot](https://github.com/MaiM-with-u/MaiBot) —— 拟人化回复的诸多配方来源
+- [tabler/tabler-icons](https://github.com/tabler/tabler-icons) —— 面板图标（MIT，`<path d>` 数据内联在 `lib/client.js` 的 `ICON_PATHS`，版权声明见仓库根 [NOTICE](NOTICE)）
 
 ## 免责声明
 
