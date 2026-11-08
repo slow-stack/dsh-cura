@@ -1,0 +1,29 @@
+# dsh-cura bundle layer: 注册 QQ 伴生增强插件（两行）
+# 1. dsh-cura——主插件（检索注入 + 大脑代理 127.0.0.1:8765 + 托管 Python 语音引擎）
+# 2. dsh-cura-rules-remote——root 平面 Typert Remote（curaRules）：
+#    规则库面板的数据面（CRUD + 学习引擎），DSH 设置页/侧边栏面板经网关调用。
+#    学习引擎只在这一行跑（单一写方）；主插件只读 rules.json 做检索注入。
+# 注意：bundle 层是 insert 操作方言；用户如需覆盖配置，请在 profile 的
+# cordis.patch.yml 里按 id 写顶层条目（insert 块内行 configEditor 不可寻址）。
+# enginePython/engineDir 与 targetUser 是机器相关的，请在 profile 层按 id 覆盖填写。
+- insert:
+    - id: dsh-cura
+      name: dsh-cura
+      config:
+        port: 8765
+        provider: xdpool
+        model: deepseek-v4.1-flash
+        enginePython: ''
+        engineDir: ''
+        targetUser: ''
+    - id: dsh-cura-rules-remote
+      name: 'dsh-cura/rules-remote'
+      config:
+        targetUser: ''
+        rulesFile: 'D:\dsh-cura\rules.json'
+        healthFile: 'D:\dsh-cura\health.json'
+        provider: xdpool
+        model: deepseek-v4.1-flash
+        learnEnabled: true
+        learnIntervalMin: 360
+        learnMaxRules: 140
