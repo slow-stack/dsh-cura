@@ -23,3 +23,16 @@ __pycache__/
 
 # 大脑代理的组合缓存（运行时产物，不进仓库）
 .cura-cache/
+
+# 通话引擎（engine/）：配置含 QQ 号与密钥，运行时产物不进仓库
+engine/config.json
+engine/__pycache__/
+engine/debug-run-napcat.mjs
+# .scratch 是探索性探针脚本的堆放地，只保留维护中的测试与配置样例
+engine/.scratch/*
+!engine/.scratch/t_session.py
+!engine/.scratch/t_reply.py
+!engine/.scratch/t_drain.py
+!engine/.scratch/t_threshold.py
+!engine/.scratch/t_polling.py
+!engine/.scratch/t_cal.py
