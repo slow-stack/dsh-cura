@@ -66,12 +66,28 @@ QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留�
   config:
     targetUser: '你的QQ号'        # 会话 onebot-private-<QQ号>
     enginePython: D:\Miniconda\envs\qqcall\python.exe   # 可选
-    engineDir: D:\path\to\qq-call-engine               # 可选（托管通话引擎时）
+    engineDir: D:\dsh-cura\engine                     # 可选（托管通话引擎时，引擎已随本仓库在 engine/）
 ```
 
 其余字段（回复规则、人设、语料目录、场景、语音条模式）都在 Config schema 里，重启后在 DSH 插件设置页可视化修改；也可以直接改本仓库的 `cordis.patch.yml` 默认值。
 
 ## 组件说明
+
+### engine/（Python 语音通话引擎）
+
+QQ 语音通话与 DSH 内语音对话的 Python 侧：采集（sounddevice，WDM-KS 优先）→ VAD/断句 → faster-whisper ASR → 大脑（8765 或 DSH）→ TTS → 播放，含打断（barge-in）。
+
+之前它散在工作区里、不是 git 仓库，现在整目录收进本仓库，只有源码与维护中的测试入库：
+
+- `engine.py`：主程序，`dsh-chat` 子命令给 DSH 内语音用，无子命令时轮询 QQ 通话桥 6110
+- `.scratch/t_*.py`：维护中的六套测试（session / reply / drain / threshold / polling / cal）
+- `config.json`、`engine.log`、探针产物与 `.scratch` 下的探索脚本都不入库（含 QQ 号或本机路径）
+
+跑测试（Windows，需 conda 环境与系统 PATH，否则 soundcard 找不到 ole32）：
+
+```bash
+PYTHONPATH=D:\dsh-cura\engine D:\Miniconda\envs\qqcall\python.exe engine/.scratch/t_session.py
+```
 
 ### lib/butler.js（管家工具挂载）
 
