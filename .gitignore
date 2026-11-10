@@ -20,3 +20,6 @@ tts-volc.py
 __pycache__/
 # Windows 缓存工具按 cwd 展开 %SystemDrive% 留下的垃圾目录，不要进版本库
 %SystemDrive%/
+
+# 大脑代理的组合缓存（运行时产物，不进仓库）
+.cura-cache/
