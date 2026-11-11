@@ -35,24 +35,41 @@ QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留�
 | STT 包装器 | ✅ | `stt-whisper.py`：faster-whisper 包装，适配 dsh-onebot 的 `custom` STT 引擎（`{file}`/`{out}` 模板） |
 | 语音通话引擎托管 | 🅿️ 搁置 | 托管一个 Python 通话引擎（自动接听/对话/挂断，基于 [KoishiRTC](https://github.com/Touch-Night/KoishiRTC) 系桥）。QQ 通话里"对方声音回放路由"在 Windows 上暂无可靠解（上游待验证），代码完整保留，随时可复活 |
 
-## 安装（手动，Windows + DSH 桌面版）
+## 安装（Windows + DSH 桌面版）
 
-> 需要已装好 [dsh-onebot-qq](https://github.com/NapNeko/dsh-onebot-qq) 并有一条能用的 QQ 通道。
+> 需要已装好 [dsh-onebot-qq](https://github.com/NapNeko/dsh-onebot-qq)、Node.js ≥ 20，并有一条能用的 QQ 通道。
 
-1. 把本仓库克隆到固定位置（例如 `D:\dsh-cura`）：
+### 方式一：npm（推荐）
+
+1. 进 DSH profile 目录装（默认 profile 一般是 `~/.dsh/profiles/desktop`，装了多个 profile 时就选你用的那个）：
    ```powershell
-   git clone https://github.com/slow-stack/dsh-cura.git D:\dsh-cura
+   cd <DSH profile 目录>
+   npm install dsh-cura
+   ```
+2. 编辑同目录的 `package.json`，把插件登记进 bundles（`dependencies` 那行 npm 已经写好了）：
+   ```jsonc
+   "dsh": { "profile": { "bundles": [ "dsh-cura" /* 追加到数组 */ ] } }
+   ```
+3. 重启 DSH。插件设置页里填机器相关项（见「配置」）。
+
+包的默认路径（`rules.json` / `health.json` / `voice.json` / `corpus/` / `say.ps1` / `stt-whisper.py`）全部按**插件包根目录**推导，装在哪个盘都不用改；要挪到别处（比如放自己的数据盘）在 profile 层覆盖即可。
+
+### 方式二：从源码（要改代码/跟 main 走时用）
+
+1. 把仓库克隆到固定位置：
+   ```powershell
+   git clone https://github.com/slow-stack/dsh-cura.git <你的目录>
    ```
 2. 在 DSH profile 的 `node_modules` 里建 junction（以默认 profile 为例）：
    ```powershell
-   cmd /c mklink /J "D:\DSH\.dsh\profiles\desktop\node_modules\dsh-cura" "D:\dsh-cura"
+   cmd /c mklink /J "<DSH profile 目录>\node_modules\dsh-cura" "<你的目录>"
    ```
-3. 编辑 `D:\DSH\.dsh\profiles\desktop\package.json`，两处登记：
+3. 编辑 `<DSH profile 目录>\package.json`，两处登记：
    ```jsonc
-   "dependencies": { "dsh-cura": "link:D:/dsh-cura" },
+   "dependencies": { "dsh-cura": "link:<你的目录>" },
    "dsh": { "profile": { "bundles": [ "dsh-cura" /* 追加到数组 */ ] } }
    ```
-4. 重启 DSH。插件设置页里填机器相关项（见下）。
+4. 重启 DSH。
 
 > ⚠️ 踩坑提示（都是实测踩过的）：bundle 层 `cordis.patch.yml` 必须是 `- insert:` 操作方言；插件 `package.json` 必须带 `"dsh": {"bundle": {"patch": "./cordis.patch.yml"}}` 元数据，否则加载器静默跳过；只放 node_modules 不登记 bundles 不会加载。
 
@@ -64,9 +81,9 @@ QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留�
 - id: dsh-cura
   name: dsh-cura
   config:
-    targetUser: '你的QQ号'        # 会话 onebot-private-<QQ号>
-    enginePython: D:\Miniconda\envs\qqcall\python.exe   # 可选
-    engineDir: D:\dsh-cura\engine                     # 可选（托管通话引擎时，引擎已随本仓库在 engine/）
+    targetUser: '你的QQ号'          # 会话 onebot-private-<QQ号>
+    enginePython: <你的 python.exe>  # 可选，留空则用 CURA_PYTHON 或 PATH 里的 python
+    engineDir: <插件目录>\engine      # 可选（托管通话引擎时用，引擎随包在 engine/）
 ```
 
 其余字段（回复规则、人设、语料目录、场景、语音条模式）都在 Config schema 里，重启后在 DSH 插件设置页可视化修改；也可以直接改本仓库的 `cordis.patch.yml` 默认值。
@@ -83,11 +100,13 @@ QQ 语音通话与 DSH 内语音对话的 Python 侧：采集（sounddevice，WD
 - `.scratch/t_*.py`：维护中的六套测试（session / reply / drain / threshold / polling / cal）
 - `config.json`、`engine.log`、探针产物与 `.scratch` 下的探索脚本都不入库（含 QQ 号或本机路径）
 
-跑测试（Windows，需 conda 环境与系统 PATH，否则 soundcard 找不到 ole32）：
+跑测试（Windows，需要装了依赖的 Python 环境和系统 PATH——只给 conda 路径的话 soundcard 会找不到 `ole32`）：
 
 ```bash
-PYTHONPATH=D:\dsh-cura\engine D:\Miniconda\envs\qqcall\python.exe engine/.scratch/t_session.py
+PYTHONPATH=<你的目录>/engine <你的 python.exe> engine/.scratch/t_session.py
 ```
+
+> 测试脚本随**源码仓库**分发，不打进 npm 包（`package.json` 的 `files` 只收录运行所需文件）。
 
 ### lib/butler.js（管家工具挂载）
 
@@ -118,7 +137,7 @@ PYTHONPATH=D:\dsh-cura\engine D:\Miniconda\envs\qqcall\python.exe engine/.scratc
 ### say.ps1（语音合成助手）
 
 ```powershell
-powershell -NoProfile -File D:\dsh-cura\say.ps1 -Text "要说的话" -Out "$env:TEMP\reply.mp3"
+powershell -NoProfile -File <插件目录>\say.ps1 -Text "要说的话" -Out "$env:TEMP\reply.mp3"
 ```
 
 edge-tts 失败（断网/接口抽风）时自动降级为 Windows 离线 SAPI 语音。agent 在会话里用 shell 调用它生成音频文件，然后用 dsh-onebot 的 `qq_send_voice` 工具发送。
@@ -131,7 +150,7 @@ edge-tts 失败（断网/接口抽风）时自动降级为 Windows 离线 SAPI �
 sttEnabled: true
 sttEngine: custom
 sttCommand: <你的python.exe>   # 需要 faster-whisper
-sttArgs: ["D:/dsh-cura/stt-whisper.py", "--file", "{file}", "--out", "{out}"]
+sttArgs: ["<插件目录>/stt-whisper.py", "--file", "{file}", "--out", "{out}"]
 ```
 
 ## Roadmap
