@@ -43,6 +43,20 @@ log = logging.getLogger("qq-call")
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = Path(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].endswith(".json") else HERE / "config.json"
 
+
+def _find_asset(name: str) -> Path:
+    """在引擎目录和它上一级（仓库根，say.ps1 与本地密钥那一层）里找资源文件。
+
+    发布后引擎位于 <包>/engine/，而 tts-volc.py / .key / .volc 这类本地私有文件
+    按习惯放在包根；git clone 时两者都在仓库内。都找不到就返回引擎目录下的
+    候选路径，调用方用 exists() 自行判定并跳过该层。
+    """
+    for base in (HERE, HERE.parent):
+        cand = base / name
+        if cand.exists():
+            return cand
+    return HERE / name
+
 # LLM 端点安全基线：默认强制 https + 拒绝私网地址（防 SSRF）。
 # 配置 llm.allowPrivate: true 可放开私网/环回（用于指向本机 DSH 等本地服务）。
 
@@ -556,12 +570,15 @@ class Brain:
         import soundfile as sf
         target = self.cfg["audio"]["samplerate"]
 
-        # Tier -1: 火山复刻音色（夏以昼声线，经 dsh-qq-anima/tts-volc.py）
+        # Tier -1: 火山复刻音色（声线/资源在本地 tts-volc.py + .volc，均不入库）
         try:
             import subprocess
+            volc_script = Path(str(self.cfg["tts"].get("volcScript") or _find_asset("tts-volc.py")))
+            if not volc_script.exists():
+                raise FileNotFoundError(str(volc_script))
             volc_out = Path(self.cfg["audio"].get("workdir", tempfile.gettempdir())) / f"volc-{int(time.time())}.mp3"
             subprocess.run(
-                [sys.executable, r"D:\dsh-qq-anima\tts-volc.py", "--text", text, "--out", str(volc_out)],
+                [sys.executable, str(volc_script), "--text", text, "--out", str(volc_out)],
                 timeout=120, capture_output=True, check=True,
             )
             if volc_out.exists() and volc_out.stat().st_size > 1000:
@@ -579,9 +596,9 @@ class Brain:
         except Exception as e:
             log.warning("火山复刻 TTS 失败，落回下一层: %s", e)
 
-        # Tier 0: 阿里云 qwen-audio-3.0-tts-plus（男声 longanlufeng，key 来自 dsh-qq-anima）
+        # Tier 0: 阿里云 qwen-audio-3.0-tts-plus（男声 longanlufeng，key 放包根 .key，不入库）
         try:
-            key_path = Path(r"D:\dsh-qq-anima\.key")
+            key_path = Path(str(self.cfg["tts"].get("aliyunKeyFile") or _find_asset(".key")))
             if key_path.exists():
                 key = key_path.read_text(encoding="utf-8-sig").strip()
                 r = httpx.post(
@@ -871,7 +888,7 @@ class CallSession:
         )
         text = "\n".join(lines)
         event = {
-            "time": int(time.time()), "self_id": 2237170771,
+            "time": int(time.time()), "self_id": int(self.cfg.get("selfId") or 0),
             "post_type": "message", "message_type": "private", "sub_type": "friend",
             "message_id": int(time.time()) % 10**9, "user_id": int(peer),
             "message": [{"type": "text", "data": {"text": text}}],

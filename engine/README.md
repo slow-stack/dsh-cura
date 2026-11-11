@@ -13,14 +13,14 @@
 
 ## 前置条件
 
-| 要什么 | 你的现状 |
+| 要什么 | 说明 |
 |---|---|
-| Windows 10/11 x64 | ✅ |
-| Node.js ≥ 22.19 | ✅ v24.15.0 |
-| Python 3.11 环境（faster-whisper 的 ctranslate2 暂无 3.13 轮子） | 用 Miniconda 建 |
-| VB-Audio Virtual Cable（一次装两条虚拟声卡） | 需安装 |
-| 通话桥仓库 napcat-qq-voice-call-win | `git clone` |
-| DeepSeek API Key | [platform.deepseek.com](https://platform.deepseek.com) |
+| Windows 10/11 x64 | x64 桌面版 |
+| Node.js ≥ 22.19 | 通话桥是 Node 写的 |
+| Python 3.11 环境 | faster-whisper 的 ctranslate2 暂无 3.13 轮子，建议 conda 单独建一个 |
+| VB-Audio Virtual Cable | 一次装两条虚拟声卡（CABLE + Hi-Fi Cable） |
+| 通话桥仓库 napcat-qq-voice-call-win | 见步骤 2，`git clone` 下来 |
+| LLM API Key | 任意 OpenAI 兼容端点，[platform.deepseek.com](https://platform.deepseek.com) 也行 |
 
 ## 部署步骤
 
@@ -35,8 +35,8 @@
 ```powershell
 git clone https://github.com/oldhan13/napcat-qq-voice-call-win.git
 cd napcat-qq-voice-call-win
-node bridge\qq\windows\manage.mjs install --install-dir D:\RTCWorkspace\RTCQQ
-node bridge\qq\windows\manage.mjs doctor  --install-dir D:\RTCWorkspace\RTCQQ
+node bridge\qq\windows\manage.mjs install --install-dir <安装目录>
+node bridge\qq\windows\manage.mjs doctor  --install-dir <安装目录>
 ```
 
 `install` 会下载官方 QQ 9.9.36（约 330MB，SHA256 校验）并搭好 NapCat + AV Host。
@@ -45,7 +45,7 @@ node bridge\qq\windows\manage.mjs doctor  --install-dir D:\RTCWorkspace\RTCQQ
 ### 3. 停掉旧 NapCat（重要：同号不能双开）
 
 ```powershell
-# 停掉你现在 D:\NapCat\shell 的 NapCat 实例（整个进程树）
+# 停掉你现在正在跑的那个 NapCat 实例（整个进程树）
 taskkill /F /IM node.exe /FI "WINDOWTITLE eq NapCat" 2>$null
 # 或者直接在旧 WebUI 里退出登录后关闭进程；确认 6099 不再监听
 ```
@@ -53,19 +53,19 @@ taskkill /F /IM node.exe /FI "WINDOWTITLE eq NapCat" 2>$null
 ### 4. 起新 NapCat 并登录
 
 ```powershell
-node bridge\qq\windows\manage.mjs run-napcat --install-dir D:\RTCWorkspace\RTCQQ
+node bridge\qq\windows\manage.mjs run-napcat --install-dir <安装目录>
 ```
 
-- 浏览器开 `http://127.0.0.1:6210`（token 在 `D:\RTCWorkspace\RTCQQ\NapCat\config\webui.json`），登录 **2237170771**。
-- 把旧配置搬过来（DSH 无感知）：
-  `copy D:\NapCat\shell\napcat\config\onebot11_2237170771.json D:\RTCWorkspace\RTCQQ\NapCat\config\`
+- 浏览器开 `http://127.0.0.1:6210`（token 在 `<安装目录>\NapCat\config\webui.json`），用**要接电话的那个号**登录。
+- 如果之前已经有一个 NapCat 在跑，把它的账号配置搬过来（DSH 无感知）：
+  `copy <旧 NapCat 目录>\config\onebot11_<你的QQ>.json <安装目录>\NapCat\config\`
   （反向 WS `ws://127.0.0.1:8643/ws` 原样保留，DSH 自动重连；"签名"HTTP 服务也一并搬过来了。）
 
 ### 5. 起 AV Host + 配声卡路由
 
 ```powershell
-node bridge\qq\windows\manage.mjs run-av-host --install-dir D:\RTCWorkspace\RTCQQ
-node bridge\qq\windows\manage.mjs control --install-dir D:\RTCWorkspace\RTCQQ --action devices
+node bridge\qq\windows\manage.mjs run-av-host --install-dir <安装目录>
+node bridge\qq\windows\manage.mjs control --install-dir <安装目录> --action devices
 ```
 
 用 `devices` 输出的**编号**建 `route.json`（input=她听，output=她说）：
@@ -75,7 +75,7 @@ node bridge\qq\windows\manage.mjs control --install-dir D:\RTCWorkspace\RTCQQ --
 ```
 
 ```powershell
-node bridge\qq\windows\manage.mjs control --install-dir D:\RTCWorkspace\RTCQQ --action route --body-file route.json
+node bridge\qq\windows\manage.mjs control --install-dir <安装目录> --action route --body-file route.json
 ```
 
 **验收**：返回 `ready: true`。不配就拨号会报 `CAPABILITY_UNAVAILABLE`——不是坏了，是没配。
@@ -89,9 +89,10 @@ cd <本目录>
 pip install -r requirements.txt
 copy config.example.json config.json
 # 编辑 config.json：
-#   whitelist      → 你的大号 QQ 号（字符串）
-#   deepseek.apiKey → 你的 key（或设环境变量 DEEPSEEK_API_KEY）
-#   tokenFile      → D:\RTCWorkspace\RTCQQ\runtime\control.token
+#   whitelist  → 允许自动接听的 QQ 号（字符串数组）
+#   selfId     → 你的机器人 QQ 号（写通话记录时用）
+#   llm.apiKey → 你的 key（或设环境变量 LLM_API_KEY）
+#   tokenFile  → <安装目录>\runtime\control.token
 ```
 
 ### 7. 跑通验收链
@@ -101,8 +102,8 @@ python engine.py status     # 能看到 selfId/媒体状态即桥正常
 python engine.py            # 常驻，开始监听来电
 ```
 
-用大号给 **2237170771** 打 QQ 语音电话 → 引擎自动接 → 听到"喂，我在，请讲" → 说话 → 它回复 →
-说"拜拜"挂断。也可以反过来：`python engine.py dial 你的大号`。
+用你的大号给你的机器人号打 QQ 语音电话 → 引擎自动接 → 听到"喂，我在，请讲" → 说话 → 它回复 →
+说"拜拜"挂断。也可以反过来：`python engine.py dial <你的大号>`。
 
 验收链（来自手册）：
 `6110/3000/6111/6210 都在听 → status 的 selfId 是你的号 → route ready:true → 来电自动接 → 对话 → 挂断`

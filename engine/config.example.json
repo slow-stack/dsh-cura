@@ -1,6 +1,7 @@
 {
   "controlPort": 6110,
-  "tokenFile": "D:\\RTCWorkspace\\RTCQQ\\runtime\\control.token",
+  "tokenFile": "C:\\path\\to\\rtc-control.token",
+  "selfId": 0,
   "whitelist": ["把这里换成允许自动接听的QQ号（字符串）"],
   "unknownCaller": "ignore",
   "greeting": "喂，我在，请讲。",
@@ -21,7 +22,9 @@
   },
   "tts": {
     "voice": "zh-CN-XiaoxiaoNeural",
-    "rate": "+0%"
+    "rate": "+0%",
+    "volcScript": "",
+    "aliyunKeyFile": ""
   },
   "audio": {
     "samplerate": 48000,
