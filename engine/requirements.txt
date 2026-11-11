@@ -1,0 +1,6 @@
+httpx>=0.27
+numpy>=1.26
+soundcard>=0.4.3
+soundfile>=0.12.1
+edge-tts>=6.1.9
+faster-whisper>=1.0.0

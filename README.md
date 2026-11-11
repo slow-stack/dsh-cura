@@ -11,7 +11,7 @@
 QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留）
                     ▲
                     │ 贴附（agents.get → systemPrompt.section）
-        dsh-cura（本插件）：回复规则 / 人设 / 语料 / 日记调度
+        dsh-cura（本插件）：回复规则 / 人设 / 语料 / 健康与周期关怀
                     │
                     ├─ ctx.llm.stream（模型随 DSH 设置走，如 xdpool）
                     ├─ 管家工具：外部 MCP（瑞幸/高德…）挂进本会话（lib/butler.js）
@@ -34,26 +34,42 @@ QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留�
 | 语音合成助手 | ✅ | `say.ps1`：edge-tts（自然，云）失败自动换 Windows 离线 SAPI（稳定，本地）。agent 用 shell 调它生成音频，再用 `qq_send_voice`（dsh-onebot 自带）发送——职责不重叠 |
 | STT 包装器 | ✅ | `stt-whisper.py`：faster-whisper 包装，适配 dsh-onebot 的 `custom` STT 引擎（`{file}`/`{out}` 模板） |
 | 语音通话引擎托管 | 🅿️ 搁置 | 托管一个 Python 通话引擎（自动接听/对话/挂断，基于 [KoishiRTC](https://github.com/Touch-Night/KoishiRTC) 系桥）。QQ 通话里"对方声音回放路由"在 Windows 上暂无可靠解（上游待验证），代码完整保留，随时可复活 |
-| 每日日记 | 🚧 默认关 | schedule 服务定时把日记指令投递进 QQ 会话（代码已就绪，`diaryEnabled` 打开即用） |
 
-## 安装（手动，Windows + DSH 桌面版）
+## 安装（Windows + DSH 桌面版）
 
-> 需要已装好 [dsh-onebot-qq](https://github.com/NapNeko/dsh-onebot-qq) 并有一条能用的 QQ 通道。
+> 需要已装好 [dsh-onebot-qq](https://github.com/NapNeko/dsh-onebot-qq)、Node.js ≥ 20，并有一条能用的 QQ 通道。
 
-1. 把本仓库克隆到固定位置（例如 `D:\dsh-cura`）：
+### 方式一：npm（推荐）
+
+1. 进 DSH profile 目录装（默认 profile 一般是 `~/.dsh/profiles/desktop`，装了多个 profile 时就选你用的那个）：
    ```powershell
-   git clone https://github.com/slow-stack/dsh-cura.git D:\dsh-cura
+   cd <DSH profile 目录>
+   npm install dsh-cura
+   ```
+2. 编辑同目录的 `package.json`，把插件登记进 bundles（`dependencies` 那行 npm 已经写好了）：
+   ```jsonc
+   "dsh": { "profile": { "bundles": [ "dsh-cura" /* 追加到数组 */ ] } }
+   ```
+3. 重启 DSH。插件设置页里填机器相关项（见「配置」）。
+
+包的默认路径（`rules.json` / `health.json` / `voice.json` / `corpus/` / `say.ps1` / `stt-whisper.py`）全部按**插件包根目录**推导，装在哪个盘都不用改；要挪到别处（比如放自己的数据盘）在 profile 层覆盖即可。
+
+### 方式二：从源码（要改代码/跟 main 走时用）
+
+1. 把仓库克隆到固定位置：
+   ```powershell
+   git clone https://github.com/slow-stack/dsh-cura.git <你的目录>
    ```
 2. 在 DSH profile 的 `node_modules` 里建 junction（以默认 profile 为例）：
    ```powershell
-   cmd /c mklink /J "D:\DSH\.dsh\profiles\desktop\node_modules\dsh-cura" "D:\dsh-cura"
+   cmd /c mklink /J "<DSH profile 目录>\node_modules\dsh-cura" "<你的目录>"
    ```
-3. 编辑 `D:\DSH\.dsh\profiles\desktop\package.json`，两处登记：
+3. 编辑 `<DSH profile 目录>\package.json`，两处登记：
    ```jsonc
-   "dependencies": { "dsh-cura": "link:D:/dsh-cura" },
+   "dependencies": { "dsh-cura": "link:<你的目录>" },
    "dsh": { "profile": { "bundles": [ "dsh-cura" /* 追加到数组 */ ] } }
    ```
-4. 重启 DSH。插件设置页里填机器相关项（见下）。
+4. 重启 DSH。
 
 > ⚠️ 踩坑提示（都是实测踩过的）：bundle 层 `cordis.patch.yml` 必须是 `- insert:` 操作方言；插件 `package.json` 必须带 `"dsh": {"bundle": {"patch": "./cordis.patch.yml"}}` 元数据，否则加载器静默跳过；只放 node_modules 不登记 bundles 不会加载。
 
@@ -65,14 +81,32 @@ QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留�
 - id: dsh-cura
   name: dsh-cura
   config:
-    targetUser: '你的QQ号'        # 会话 onebot-private-<QQ号>
-    enginePython: D:\Miniconda\envs\qqcall\python.exe   # 可选
-    engineDir: D:\path\to\qq-call-engine               # 可选（托管通话引擎时）
+    targetUser: '你的QQ号'          # 会话 onebot-private-<QQ号>
+    enginePython: <你的 python.exe>  # 可选，留空则用 CURA_PYTHON 或 PATH 里的 python
+    engineDir: <插件目录>\engine      # 可选（托管通话引擎时用，引擎随包在 engine/）
 ```
 
-其余字段（回复规则、人设、语料目录、场景、语音条模式、日记）都在 Config schema 里，重启后在 DSH 插件设置页可视化修改；也可以直接改本仓库的 `cordis.patch.yml` 默认值。
+其余字段（回复规则、人设、语料目录、场景、语音条模式）都在 Config schema 里，重启后在 DSH 插件设置页可视化修改；也可以直接改本仓库的 `cordis.patch.yml` 默认值。
 
 ## 组件说明
+
+### engine/（Python 语音通话引擎）
+
+QQ 语音通话与 DSH 内语音对话的 Python 侧：采集（sounddevice，WDM-KS 优先）→ VAD/断句 → faster-whisper ASR → 大脑（8765 或 DSH）→ TTS → 播放，含打断（barge-in）。
+
+之前它散在工作区里、不是 git 仓库，现在整目录收进本仓库，只有源码与维护中的测试入库：
+
+- `engine.py`：主程序，`dsh-chat` 子命令给 DSH 内语音用，无子命令时轮询 QQ 通话桥 6110
+- `.scratch/t_*.py`：维护中的六套测试（session / reply / drain / threshold / polling / cal）
+- `config.json`、`engine.log`、探针产物与 `.scratch` 下的探索脚本都不入库（含 QQ 号或本机路径）
+
+跑测试（Windows，需要装了依赖的 Python 环境和系统 PATH——只给 conda 路径的话 soundcard 会找不到 `ole32`）：
+
+```bash
+PYTHONPATH=<你的目录>/engine <你的 python.exe> engine/.scratch/t_session.py
+```
+
+> 测试脚本随**源码仓库**分发，不打进 npm 包（`package.json` 的 `files` 只收录运行所需文件）。
 
 ### lib/butler.js（管家工具挂载）
 
@@ -103,7 +137,7 @@ QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留�
 ### say.ps1（语音合成助手）
 
 ```powershell
-powershell -NoProfile -File D:\dsh-cura\say.ps1 -Text "要说的话" -Out "$env:TEMP\reply.mp3"
+powershell -NoProfile -File <插件目录>\say.ps1 -Text "要说的话" -Out "$env:TEMP\reply.mp3"
 ```
 
 edge-tts 失败（断网/接口抽风）时自动降级为 Windows 离线 SAPI 语音。agent 在会话里用 shell 调用它生成音频文件，然后用 dsh-onebot 的 `qq_send_voice` 工具发送。
@@ -116,7 +150,7 @@ edge-tts 失败（断网/接口抽风）时自动降级为 Windows 离线 SAPI �
 sttEnabled: true
 sttEngine: custom
 sttCommand: <你的python.exe>   # 需要 faster-whisper
-sttArgs: ["D:/dsh-cura/stt-whisper.py", "--file", "{file}", "--out", "{out}"]
+sttArgs: ["<插件目录>/stt-whisper.py", "--file", "{file}", "--out", "{out}"]
 ```
 
 ## Roadmap
@@ -124,7 +158,7 @@ sttArgs: ["D:/dsh-cura/stt-whisper.py", "--file", "{file}", "--out", "{out}"]
 - [x] 情境→表达规则库：LLM 从聊天记录抽取 `{"situation","style"}` 规则入库，按情境检索注入（MaiBot 1.x 模式）
 - [ ] 回复意愿门控：数值意愿 + 一次 yes/no "读空气"调用，决定是否回复（MaiBot 0.6 公式）
 - [ ] dsh-mneme 深度联动：QQ 会话独立记忆域（agentPreset scope 隔离）
-- [ ] 每日日记实测与"主观记忆碎片"回收
+- [ ] 手机健康数据导入：Apple Health export.zip / Health Connect 导出文件解析入库（本机解析，不上传）
 - [ ] DSH 设置页 Remote 面板（照 dsh-onebot settings-remote 契约）
 - [ ] QQ 语音通话里的语音导航：amap MCP 算路 + TTS 逐步播报（过渡方案 `say_aloud` 即可做）；真正的通话内导航等通话引擎 RX 复活后再做
 - [ ] 管家面板页：butlerServers 可视化编辑 + 各 server 连接状态展示（当前先靠 Config + 日志）
@@ -136,6 +170,7 @@ sttArgs: ["D:/dsh-cura/stt-whisper.py", "--file", "{file}", "--out", "{out}"]
 - [ClaudiaGardner/maibot-qq-voice-call](https://github.com/ClaudiaGardner/maibot-qq-voice-call) —— AVSDK Host 的原始实现
 - [NapNeko/dsh-onebot-qq](https://github.com/NapNeko/dsh-onebot-qq) —— QQ 通道层（本插件贴附的宿主）
 - [MaiM-with-u/MaiBot](https://github.com/MaiM-with-u/MaiBot) —— 拟人化回复的诸多配方来源
+- [tabler/tabler-icons](https://github.com/tabler/tabler-icons) —— 面板图标（MIT，`<path d>` 数据内联在 `lib/client.js` 的 `ICON_PATHS`，版权声明见仓库根 [NOTICE](NOTICE)）
 
 ## 免责声明
 

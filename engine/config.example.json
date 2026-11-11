@@ -1,0 +1,46 @@
+{
+  "controlPort": 6110,
+  "tokenFile": "C:\\path\\to\\rtc-control.token",
+  "selfId": 0,
+  "whitelist": ["把这里换成允许自动接听的QQ号（字符串）"],
+  "unknownCaller": "ignore",
+  "greeting": "喂，我在，请讲。",
+  "farewell": "那先这样啦，拜拜～",
+  "persona": "你是用户的AI伴侣，正在和用户QQ语音通话。说话要口语化、简短（一两句话），像真人打电话，不要用列表和emoji，听不清就自然地问。",
+  "llm": {
+    "baseUrl": "https://api.deepseek.com",
+    "apiKey": "任意 OpenAI 兼容端点；留空则用环境变量 LLM_API_KEY",
+    "model": "deepseek-chat",
+    "allowPrivate": false,
+    "maxHistory": 20,
+    "temperature": 0.8
+  },
+  "asr": {
+    "model": "small",
+    "language": "zh",
+    "device": "auto"
+  },
+  "tts": {
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "+0%",
+    "volcScript": "",
+    "aliyunKeyFile": ""
+  },
+  "audio": {
+    "samplerate": 48000,
+    "channels": 2,
+    "captureDevice": "Hi-Fi Cable Output",
+    "renderDevice": "CABLE Input",
+    "startThreshold": 0.012,
+    "stopThreshold": 0.006,
+    "trailingSilenceSec": 0.9,
+    "minSpeechSec": 0.35,
+    "maxSegmentSec": 30,
+    "bargeIn": true
+  },
+  "call": {
+    "idleTimeoutSec": 90,
+    "maxDurationSec": 600,
+    "goodbyeWords": ["再见", "拜拜", "挂了吧", "先这样"]
+  }
+}

@@ -1,5 +1,7 @@
-# TTS helper for dsh-cura (fallback chain, five tiers)
+﻿# TTS helper for dsh-cura (fallback chain, five tiers)
 # Usage: powershell -NoProfile -File say.ps1 -Text "..." -Out "reply.mp3"
+# Python: set CURA_PYTHON to a python.exe path; otherwise the first python on PATH is used.
+# Tier 0/1 need that python to have requests (and whatever tts-volc.py imports).
 # Tier 0: Volcano cloned voice (speaker/resource configured in local tts-volc.py + .volc, untracked)
 # Tier 0.5: configured OpenAI-compatible TTS (voice.json tts.openai)
 # Tier 1: Aliyun qwen-audio-3.0-tts-plus (cloud)
@@ -11,10 +13,20 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $keyFile = Join-Path $PSScriptRoot '.key'
-$py = 'D:\Miniconda\envs\qqcall\python.exe'
+
+# Python 解释器：环境变量 CURA_PYTHON 优先，其次 PATH 里的 python / python3。
+# 找不到就当 Tier 0 不可用（下面会自然跳过），不让整条链因为一个变量报错。
+$py = $env:CURA_PYTHON
+if (-not $py) {
+  $cmd = Get-Command python -ErrorAction SilentlyContinue
+  if (-not $cmd) { $cmd = Get-Command python3 -ErrorAction SilentlyContinue }
+  if ($cmd) { $py = $cmd.Source }
+}
+$hasPy = $py -and (Test-Path $py)
 
 # ---- Tier 0: Volcano cloned voice (speaker configured in local tts-volc.py) ----
 try {
+  if (-not $hasPy) { throw 'python not found (set CURA_PYTHON)' }
   $volcOut = "$env:TEMP\qq-volc-$([guid]::NewGuid().ToString('N').Substring(0,8)).mp3"
   & $py (Join-Path $PSScriptRoot 'tts-volc.py') --text $Text --out $volcOut 2>$null
   if ((Test-Path $volcOut) -and (Get-Item $volcOut).Length -gt 1000) { Write-Output $volcOut; exit 0 }
@@ -52,7 +64,9 @@ try {
 
 # ---- Tier 2: edge-tts ----
 try {
-  & 'D:\Miniconda\envs\qqcall\Scripts\edge-tts.exe' --voice zh-CN-XiaoxiaoNeural --text $Text --write-media $Out 2>$null
+  $edge = Get-Command edge-tts -ErrorAction SilentlyContinue
+  if (-not $edge) { throw 'edge-tts not on PATH' }
+  & $edge.Source --voice zh-CN-XiaoxiaoNeural --text $Text --write-media $Out 2>$null
   if ((Test-Path $Out) -and (Get-Item $Out).Length -gt 1000) { Write-Output $Out; exit 0 }
 } catch { Write-Host "tier2 edge-tts failed: $_" }
 

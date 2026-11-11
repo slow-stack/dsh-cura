@@ -6,6 +6,8 @@
 # 注意：bundle 层是 insert 操作方言；用户如需覆盖配置，请在 profile 的
 # cordis.patch.yml 里按 id 写顶层条目（insert 块内行 configEditor 不可寻址）。
 # enginePython/engineDir 与 targetUser 是机器相关的，请在 profile 层按 id 覆盖填写。
+# rulesFile/healthFile/voiceFile 不在这里写死——留空即按插件包根目录推导，
+# 这样别人装在任意路径都能用；只有要挪到别处（比如放磁盘上的数据目录）才在 profile 覆盖。
 - insert:
     - id: dsh-cura
       name: dsh-cura
@@ -20,8 +22,6 @@
       name: 'dsh-cura/rules-remote'
       config:
         targetUser: ''
-        rulesFile: 'D:\dsh-cura\rules.json'
-        healthFile: 'D:\dsh-cura\health.json'
         provider: xdpool
         model: deepseek-v4.1-flash
         learnEnabled: true
