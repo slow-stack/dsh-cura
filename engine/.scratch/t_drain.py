@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """验证 _SdRecorder.drain() 与 _speak 播放后排空，防自听复读。"""
-import sys, types, time
+import os, sys, types, time
 import numpy as np
 
-sys.path.insert(0, "..")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import engine as E
 
 FAIL = []

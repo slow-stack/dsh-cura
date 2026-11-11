@@ -1,6 +1,6 @@
 
 import sys, importlib.util, os, json
-spec = importlib.util.spec_from_file_location("eng", os.path.join(os.getcwd(), "engine.py"))
+spec = importlib.util.spec_from_file_location("eng", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "engine.py"))
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 
