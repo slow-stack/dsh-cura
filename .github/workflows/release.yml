@@ -1,0 +1,201 @@
+name: release
+
+# 推 v* 标签就发版：先跑双平台测试，再校验 tag 与 package.json 版本一致，
+# 然后 npm publish，最后用 .github/scripts/release-body.mjs 拼好的正文建 Release。
+# 正文格式固定成「描述 / 本次变更 / 安装 / 链接」四段，别在 workflow 里手改文案。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发版的标签（必须已经存在，例如 v0.9.1）'
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # 与 test.yml 同一套装法：--omit=peer 是必须的，装上 peer 会盖掉
+      # rules-remote 的降级路径，测到的就不是真实形状了。
+      - name: 安装依赖
+        run: npm install --omit=peer --no-audit --no-fund --package-lock=false
+
+      - name: 跑单测
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            while IFS= read -r line; do
+              echo "::error::$line"
+            done < <(grep -E "^(========== FAIL|FAIL |[0-9]+ 套失败)" test.log | head -20)
+          fi
+          exit "$status"
+
+  publish:
+    name: publish to npm
+    needs: [test]
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      published: ${{ steps.check.outputs.published }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: 读版本号
+        id: version
+        run: |
+          ver="$(node -p "require('./package.json').version")"
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "package.json version = $ver"
+
+      # 标签写错是发版最常见的翻车方式：v0.9.0 的标签挂着 0.8.0 的代码，
+      # 发出去之后 registry 上那个版本号就永远对不上了（不能重发）。
+      - name: 校验 tag 与 package.json 版本一致
+        run: |
+          tag="${RELEASE_TAG#v}"
+          ver="$(node -p "require('./package.json').version")"
+          echo "tag=$tag version=$ver"
+          if [ "$tag" != "$ver" ]; then
+            echo "::error::tag ${RELEASE_TAG} does not match package.json version $ver"
+            exit 1
+          fi
+
+      - name: 查 registry 上是否已有这个版本
+        id: check
+        run: |
+          ver="$(node -p "require('./package.json').version")"
+          name="$(node -p "require('./package.json').name")"
+          echo "checking $name@$ver on the registry"
+          if npm view "$name@$ver" version >/dev/null 2>&1; then
+            echo "$ver 已经发过了，跳过 publish"
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 发到 npm
+        if: steps.check.outputs.published == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::仓库没有配 NPM_TOKEN，发不出去"
+            exit 1
+          fi
+          npm publish --access public --provenance
+
+      - name: 发完回查一次
+        if: steps.check.outputs.published == 'true'
+        run: |
+          ver="$(node -p "require('./package.json').version")"
+          name="$(node -p "require('./package.json').name")"
+          # registry 有缓存延迟，给它 30 秒
+          for i in $(seq 1 10); do
+            if npm view "$name@$ver" version >/dev/null 2>&1; then
+              echo "$name@$ver 已在 registry 上"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::npm publish 报告成功，但 registry 上查不到 $name@$ver"
+          exit 1
+
+  release:
+    name: create GitHub release
+    # 必须等 publish：发不出去就不该先挂出一个 Release
+    needs: [test, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 收集本次变更的提交
+        id: commits
+        run: |
+          # 找上一个 tag 作为比较起点；没有就列全部历史。
+          prev="$(git describe --tags --abbrev=0 "${RELEASE_TAG}^" 2>/dev/null || true)"
+          if [ -n "$prev" ]; then
+            echo "上一个 tag: $prev"
+            git log --pretty=format:'%s' "$prev..${RELEASE_TAG}" > commits.txt
+          else
+            echo "没有上一个 tag，列出全部历史"
+            git log --pretty=format:'%s' "$RELEASE_TAG" > commits.txt
+          fi
+          echo "previous=$prev" >> "$GITHUB_OUTPUT"
+          echo "共 $(wc -l < commits.txt) 条提交"
+
+      # 补发老标签时，那个 tag 的树里可能还没有这个脚本（脚本是后加的），
+      # 就从默认分支取一份；取不到才退化成 GitHub 自动生成的说明。
+      - name: 取正文生成脚本
+        run: |
+          if [ ! -f .github/scripts/release-body.mjs ]; then
+            mkdir -p .github/scripts
+            git show "origin/${{ github.event.repository.default_branch }}:.github/scripts/release-body.mjs" > .github/scripts/release-body.mjs
+            echo "已从默认分支取到 release-body.mjs"
+          fi
+
+      - name: 生成 Release 标题与正文
+        run: |
+          node .github/scripts/release-body.mjs \
+            --pkg package.json \
+            --version "${{ needs.publish.outputs.version }}" \
+            --tag "${RELEASE_TAG}" \
+            --previous "${{ steps.commits.outputs.previous }}" \
+            --commits-file commits.txt \
+            --out release-body.md \
+            --title-out release-title.txt
+
+      - name: 建 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Release ${RELEASE_TAG} 已存在，不再重复建"
+            exit 0
+          fi
+          gh release create "${RELEASE_TAG}" \
+            --title "$(cat release-title.txt)" \
+            --notes-file release-body.md \
+            --verify-tag

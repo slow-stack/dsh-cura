@@ -16,6 +16,7 @@ const SUITES = [
   ['travel', 'test-travel.mjs'],
   ['luckin', 'test-luckin.mjs'],
   ['remote', 'test-remote.mjs'],
+  ['release-body', 'test-release-body.mjs'],
 ];
 
 const only = process.argv.slice(2);

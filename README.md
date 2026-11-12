@@ -219,11 +219,11 @@ sttArgs: ["<插件目录>/stt-whisper.py", "--file", "{file}", "--out", "{out}"]
 
 ```bash
 npm install          # 只是跑测试用的开发依赖（@deepseek-ai/schemastery）
-npm test             # 一次跑完六套单测
-npm test -- travel   # 只跑指定的（rules / cycle / plugin / travel / luckin / remote）
+npm test             # 一次跑完八套单测
+npm test -- travel   # 只跑指定的（rules / cycle / plugin / care / travel / luckin / remote / release-body）
 ```
 
-六套单测都在 `tests/`，全部直接驱动 `lib/` 里的生产函数（不 mock 掉被测对象），覆盖：
+八套单测都在 `tests/`，全部直接驱动 `lib/` 里的生产函数（不 mock 掉被测对象），覆盖：
 
 | 套件 | 管什么 |
 |---|---|
@@ -233,10 +233,54 @@ npm test -- travel   # 只跑指定的（rules / cycle / plugin / travel / lucki
 | `test-remote.mjs` | 宿主行服务全方法（stub cordis ctx 直测）+ 学习链路 + 出行/瑞幸接线 |
 | `test-travel.mjs` | 高德 key 收敛与打码、MCP 探针（真起 127.0.0.1 假 server）、常用坐标、`placesPrompt` |
 | `test-luckin.mjs` | 瑞幸 token 收敛、到期推算、探针带 `Authorization` 且**绝不试调**（防误下单） |
+| `test-care.mjs` | 生活关怀层：模式判定、名字表、渲染器降级、注册顺序、单条失败不连坐 |
+| `test-release-body.mjs` | Release 正文骨架：提交筛选、手写说明解析、四段格式、CLI 落盘 |
 
 不联网：所有 MCP 交互都打本机 `127.0.0.1` 上的假服务端；临时文件一律落系统临时目录，不往仓库里写。
 
 CI 在 `.github/workflows/test.yml`：每次 push 与 PR 都跑 Node 20 / 22 两档。安装依赖特意用 `npm install --omit=peer`——只装 `schemastery`，另外三个 peer 故意缺席，因为 `rules-remote` 的降级路径正是测试要覆盖的形状（装上反而测不到）。
+
+### 发版
+
+推一个 `v*` 标签就会自动发版（`.github/workflows/release.yml`）：
+
+```bash
+npm version patch --no-git-tag-version   # 或 minor / major，改 package.json
+git commit -am "chore: 发版 0.9.1"
+git push
+git tag -a v0.9.1 -m "v0.9.1"
+git push origin v0.9.1                   # ← 这一步触发整个流程
+```
+
+流程分三段，任何一段红了后面都不跑：
+
+1. **test** —— Node 20 / 22 双档跑全套单测，和 `test.yml` 用同一套装法；
+2. **publish** —— 先校验「标签版本 == `package.json` 版本」（对不上直接红，因为 npm 上的版本号发出去就改不了），再查 registry 上有没有这个版本（有就跳过），然后 `npm publish --access public --provenance`，发完回查一次确认真的能查到；
+3. **release** —— 从上一个标签列提交，拼正文，建 GitHub Release。
+
+Release 的正文格式固定成四段，由 `.github/scripts/release-body.mjs` 生成：
+
+````markdown
+<package.json 的 description>
+
+## 本次变更
+- feat: …
+- fix: …          ← 自动列上一个 tag 到本 tag 的提交，merge 与「发版」提交会被过滤
+
+## 安装
+```powershell
+cd <DSH profile 目录>
+npm install dsh-cura@0.9.1
+```
+
+## 链接
+- npm：https://www.npmjs.com/package/dsh-cura/v/0.9.1
+- 提交对比：…/compare/v0.9.0...v0.9.1
+````
+
+想给某一版写人话（推荐），加一个 `release-notes/v0.9.1.md`：第一行写 `# 标题`，标题就用它、其余进「本次变更」；不写标题就整份进正文。有这个文件就不再列提交。
+
+需要仓库里配 `NPM_TOKEN`（Settings → Secrets → Actions），权限是 npm 的 Automation token；`--provenance` 需要 workflow 的 `id-token: write`，已经在文件里给了。
 
 ## Roadmap
 
