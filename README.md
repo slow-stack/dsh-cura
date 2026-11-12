@@ -33,7 +33,7 @@ QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留�
 | 管家工具（butler） | ✅ | 把外部 MCP server（瑞幸下单、高德地图、天气……）挂进 QQ 会话，Agent 能在现实里照顾人而不只是虚拟关怀。只挂本会话、不与 DSH 设置/ds-bot 的连接管理冲突（见下方组件说明）；server 清单在 Config `butlerServers` 配，默认空 = 关 |
 | 语音合成助手 | ✅ | `say.ps1`：edge-tts（自然，云）失败自动换 Windows 离线 SAPI（稳定，本地）。agent 用 shell 调它生成音频，再用 `qq_send_voice`（dsh-onebot 自带）发送——职责不重叠 |
 | STT 包装器 | ✅ | `stt-whisper.py`：faster-whisper 包装，适配 dsh-onebot 的 `custom` STT 引擎（`{file}`/`{out}` 模板） |
-| 语音通话引擎托管 | 🅿️ 搁置 | 托管一个 Python 通话引擎（自动接听/对话/挂断，基于 [KoishiRTC](https://github.com/Touch-Night/KoishiRTC) 系桥）。QQ 通话里"对方声音回放路由"在 Windows 上暂无可靠解（上游待验证），代码完整保留，随时可复活 |
+| 语音通话引擎托管 | 🧪 beta | 托管一个 Python 通话引擎（自动接听/对话/挂断，基于 [KoishiRTC](https://github.com/Touch-Night/KoishiRTC) 系桥）。QQ 通话里"对方声音回放路由"在 Windows 上暂无可靠解（上游待验证），代码完整保留，随时可复活。<br>**标 beta 的是 DSH 内语音对话（`voice_chat`）**：已能整通跑（采集→ASR→大脑→TTS→播放），但依赖本机麦克风/扬声器与 Python 侧依赖，首次使用往往要调设备，失败率不低，故按 beta 发布；QQ 通话那半条仍是搁置 |
 
 ## 安装（Windows + DSH 桌面版）
 
