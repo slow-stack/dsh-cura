@@ -45,3 +45,6 @@ travel.json
 
 # 瑞幸页写入的 token（本机私有，绝不入库/入包）
 luckin.json
+
+# 覆盖率产物（审计时临时生成，不进仓库）
+cov-tmp/

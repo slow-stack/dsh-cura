@@ -1,22 +1,32 @@
 # dsh-cura
 
-> Cura，拉丁语的"照看、照料"。这个插件做的事：给你的 DeepSeek Harness QQ Bot 注入灵魂——人格、说话规则、语料、记忆，也会照看你的作息与身体节奏。
+> Cura，拉丁语的"照看、照料"。这个插件做的事：在 DeepSeek Harness 里替你照看生活——健康记录、周期关怀、出门查路、点杯咖啡；顺带把 QQ Bot 的人味儿（人格、说话规则、语料）一并注进去。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![平台](https://img.shields.io/badge/platform-Windows%20%7C%20DSH%20desktop-5b5bd6)
 
-**dsh-cura** 是 [DeepSeek Harness](https://chat.deepseek.com)（DSH）的**伴生增强插件**：它不接管消息流（那是 [dsh-onebot-qq](https://github.com/NapNeko/dsh-onebot-qq) 的职责），而是"贴"在 dsh-onebot 为每个 QQ 聊天创建的 Agent 会话上，注入拟人化能力。
+**dsh-cura** 是 [DeepSeek Harness](https://chat.deepseek.com)（DSH）的插件，分两层挂载、范围不同：
+
+- **生活关怀层**（`lib/care.js`）挂在插件根 ctx 上，**DSH 里任何会话都能用**——健康汇总与周期关怀、面板里存的常用坐标、管家 MCP（高德 / 瑞幸）。这些事跟"在哪个窗口说话"无关，主对话框里也该能问一句「附近有咖啡吗」。
+- **QQ 伴生层**只贴 QQ 会话 scope，注入拟人化：回复规则、人设、语料、情境表达规则。它不接管消息流（那是 [dsh-onebot-qq](https://github.com/NapNeko/dsh-onebot-qq) 的职责）。
 
 ```
-QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留）
-                    ▲
-                    │ 贴附（agents.get → systemPrompt.section）
-        dsh-cura（本插件）：回复规则 / 人设 / 语料 / 健康与周期关怀
-                    │
-                    ├─ ctx.llm.stream（模型随 DSH 设置走，如 xdpool）
-                    ├─ 管家工具：外部 MCP（瑞幸/高德…）挂进本会话（lib/butler.js）
-                    └─ 托管 Python 语音通话引擎（可选，见下）
+ DS  任  何  会  话（主对话框 / QQ / 子会话…）
+ ┌────────────────────────────────────────────┐
+ │ 生活关怀层（插件根 ctx，全部会话可见）        │
+ │   健康汇总 · 周期关怀 · 常用坐标 · 管家 MCP   │
+ └────────────────────────────────────────────┘
+                     ▲ 叠加
+ QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留）
+                     ▲
+                     │ 贴附（agents.get → systemPrompt.section）
+        QQ 伴生层：回复规则 / 人设 / 语料 / 情境表达规则
+                     │
+                     ├─ ctx.llm.stream（模型随 DSH 设置走，如 xdpool）
+                     └─ 托管 Python 语音通话引擎（可选，见下）
 ```
+
+不想让主对话也带这些？把 `careGlobal` 关掉就退回旧行为（只在 QQ 会话里挂），见下方「生活关怀层」。
 
 ## 功能
 
@@ -28,9 +38,9 @@ QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留�
 | 情境表达规则库 | ✅ | MaiBot 式"情境→表达"规则：全局说话方式+反面清单进 system prompt 段，情境规则每轮按最近用户消息检索注入（`systemPrompt.context`，官方动态上下文）；规则库 `rules.json` 人工可编辑、改完即生效，无需重启 |
 | 规则库管理面板（DSH 内） | ✅ | DSH 左侧侧边栏新增 "Cura" 入口（内含「表达规则 / 语音通话 / 健康日志 / 周期关怀 / 出行 · 高德 / 瑞幸 · 点单」六页，瑞幸页为 🧪 beta）（`sidebar.panellist` + `main` keyed slot，浏览器半侧 `lib/client.js`）：增删改查、启用/停用、手动学习、导出 JSON；数据走 Typert Remote（`curaRules` 命名空间，宿主行 `lib/rules-remote.js`，独立 patch 行），不依赖任何独立本地服务 |
 | 规则自动学习 | ✅ | 定时（默认 6h）从对话事件流抽取新规则：LLM 抽取 → 本地去重审查（情境 bigram 相似 + 关键词重合）→ 入库；首跑只建游标不学习，库满自动停；学习引擎在 rules-remote 行（单一写方），面板可手动触发 |
-| 健康日志（男女通用） | ✅ | 面板「健康日志」页手动记，或在 QQ 聊天里说（agent 的 `health_log` 工具自动抽取记录：睡眠/运动/情绪/备注）；近 7 天汇总 + 关注目标每轮注入会话，Cura 会顺势劝早睡/夸坚持。数据只存本机 `health.json`（gitignored） |
-| 周期关怀（可选，默认关） | ✅ | 健康模块的子功能：面板「周期关怀」页开启后，按末次月经+周期长度估算四阶段（月经/卵泡/排卵/黄体），今日阶段+相处建议每轮注入会话——经期多照顾、卵泡期推学习、排卵期排表达类任务、经前别硬催；阶段建议可在面板改。数据只存本机 `health.json`，生活方式参考而非医疗建议 |
-| 管家工具（butler） | ✅ | 把外部 MCP server（瑞幸下单、高德地图、天气……）挂进 QQ 会话，Agent 能在现实里照顾人而不只是虚拟关怀。只挂本会话、不与 DSH 设置/ds-bot 的连接管理冲突（见下方组件说明）；server 清单在 Config `butlerServers` 配（默认空 = 关）；高德另有面板「出行 · 高德」页、瑞幸有「瑞幸 · 点单」页（🧪 beta，见下），填 key/token 即写 `travel.json` / `luckin.json`、下一条 QQ 会话生效；高德页还能把「学校 / 家」这类常用坐标存下来，以 `qq-bot:places` 注入会话，模型算「附近」时不用再反问你在哪 |
+| 健康日志（男女通用） | ✅ | 面板「健康日志」页手动记，或在任意会话里说（agent 的 `health_log` 工具自动抽取记录：睡眠/运动/情绪/备注）；近 7 天汇总 + 关注目标每轮注入**所有会话**，Cura 会顺势劝早睡/夸坚持。数据只存本机 `health.json`（gitignored） |
+| 周期关怀（可选，默认关） | ✅ | 健康模块的子功能：面板「周期关怀」页开启后，按末次月经+周期长度估算四阶段（月经/卵泡/排卵/黄体），今日阶段+相处建议每轮注入**所有会话**——经期多照顾、卵泡期推学习、排卵期排表达类任务、经前别硬催；阶段建议可在面板改。数据只存本机 `health.json`，生活方式参考而非医疗建议 |
+| 管家工具（butler） | ✅ | 把外部 MCP server（瑞幸下单、高德地图、天气……）挂进**所有会话**，Agent 能在现实里照顾人而不只是虚拟关怀。与 DSH 设置/ds-bot 的连接管理不冲突（见下方组件说明）；server 清单在 Config `butlerServers` 配（默认空 = 关）；高德另有面板「出行 · 高德」页、瑞幸有「瑞幸 · 点单」页（🧪 beta，见下），填 key/token 即写 `travel.json` / `luckin.json`、下一条消息就带上；高德页还能把「学校 / 家」这类常用坐标存下来，以 `cura:places` 注入所有会话，模型算「附近」时不用再反问你在哪 |
 | 语音合成助手 | ✅ | `say.ps1`：edge-tts（自然，云）失败自动换 Windows 离线 SAPI（稳定，本地）。agent 用 shell 调它生成音频，再用 `qq_send_voice`（dsh-onebot 自带）发送——职责不重叠 |
 | STT 包装器 | ✅ | `stt-whisper.py`：faster-whisper 包装，适配 dsh-onebot 的 `custom` STT 引擎（`{file}`/`{out}` 模板） |
 | 语音通话引擎托管 | 🧪 beta | 托管一个 Python 通话引擎（自动接听/对话/挂断，基于 [KoishiRTC](https://github.com/Touch-Night/KoishiRTC) 系桥）。QQ 通话里"对方声音回放路由"在 Windows 上暂无可靠解（上游待验证），代码完整保留，随时可复活。<br>**标 beta 的是 DSH 内语音对话（`voice_chat`）**：已能整通跑（采集→ASR→大脑→TTS→播放），但依赖本机麦克风/扬声器与 Python 侧依赖，首次使用往往要调设备，失败率不低，故按 beta 发布；QQ 通话那半条仍是搁置 |
@@ -108,9 +118,27 @@ PYTHONPATH=<你的目录>/engine <你的 python.exe> engine/.scratch/t_session.p
 
 > 测试脚本随**源码仓库**分发，不打进 npm 包（`package.json` 的 `files` 只收录运行所需文件）。
 
+### lib/care.js（生活关怀层 · 所有会话）
+
+把"照看生活"那部分从 QQ 会话里解耦出来，挂到插件根 ctx 上——DSH 里**任何会话**（主对话框、QQ、子会话）都能看到同一份关怀上下文。
+
+| 条目 | order | 内容 | 形态 |
+|---|---|---|---|
+| `cura:butler` | 93 | 管家引导语 + 当前已挂的 server 清单 | section（函数文本，每轮重读） |
+| `cura:health` | 94 | 近 7 天汇总 + 关注目标 + 周期关怀 | context（动态） |
+| `cura:places` | 94 | 面板里存的常用坐标 | context（动态） |
+
+设计上的三个取舍：
+
+- **为什么是 `ctx.get('systemPrompt')` 而不是把 `systemPrompt` 加进 `inject`**：照 `dsh-voice-call` 的成熟写法，避免改 inject 带来的装载顺序风险；宿主没这个服务时 `careMode()` 自动退回 QQ 专用模式并记一条 warning，而不是静默丢掉这些能力。
+- **为什么全局名与 QQ 旧名不同**（`cura:*` vs `qq-bot:*`）：全局模式下 QQ 会话不再重复注册那三项，直接靠 scope 继承；只有退回 QQ 专用模式时才用旧名补挂。不同名 + 只挂一边 = 提示词里不会出现两份同样文字。
+- **为什么每条单独 try/catch**：一条 section 重名不该连坐另外两条；挂不上的进 `failed` 并记日志，全部失败时会显式 warning「未挂上任何条目」，不会嘴上说挂好了实际什么都没有。
+
+`careGlobal`（Config，默认 `true`）关掉即退回旧行为：只在 QQ 会话里挂 `qq-bot:butler` / `qq-bot:health` / `qq-bot:places`。
+
 ### lib/butler.js（管家工具挂载）
 
-让 QQ 会话里的 Agent 调用外部 MCP server，把"照顾"落进现实：点咖啡（自部署的瑞幸 MCP）、查地点/路线/天气（高德 amap MCP）、黄历、待办……社区 server 在 GitHub 上找（搜 `mcp server` + 场景名）。
+让**所有会话**里的 Agent 调用外部 MCP server，把"照顾"落进现实：点咖啡（自部署的瑞幸 MCP）、查地点/路线/天气（高德 amap MCP）、黄历、待办……社区 server 在 GitHub 上找（搜 `mcp server` + 场景名）。
 
 配置（机器相关项请写在 profile 层 patch）：
 
@@ -127,28 +155,28 @@ PYTHONPATH=<你的目录>/engine <你的 python.exe> engine/.scratch/t_session.p
 **与生态的冲突处理**（为什么不另做一套"连接管理"）：
 
 - DSH 核心自带 MCP 连接管理（设置页 + `storages/mcp_connector.json`，catalog 里就有 amap），ds-bot 另有按 Bot 粒度的 Connectors/Capabilities。本插件**不做管理器**，只做"会话内挂载器"：server 清单来自本插件 Config，不提供审批流/密钥治理/连接状态页。
-- 挂载走 DSH 官方通道：经 `loader.import('@deepseek-ai/dsh-mcp-client')` 拿到官方 MCP 客户端，`scope.plugin(mcpPlugin, config)` 挂到 `onebot-private-<QQ>` 这一个会话上（ds-bot 同款挂法）。ds-bot 的能力只挂它自己的 Bot 会话，两者作用域不相交。
+- 挂载走 DSH 官方通道：经 `loader.import('@deepseek-ai/dsh-mcp-client')` 拿到官方 MCP 客户端，`scope.plugin(mcpPlugin, config)` 挂到目标 scope 上（ds-bot 同款挂法）。**默认挂插件根 ctx = 所有会话**；`careGlobal=false` 时退回挂 `onebot-private-<QQ>` 单个会话。ds-bot 的能力只挂它自己的 Bot 会话，两者作用域不相交。
 - 工具名天然隔离：挂进来的是 `mcp__<serverName>__*`，与 `qq_*` 工具、cura 自有工具（`say_aloud`/`voice_chat`/`health_log`）互不覆盖。
-- 重名防御：挂载前读核心连接表，同一 `serverName` 已在 DSH 设置里连接的，以核心为准、本会话跳过并记 warning——避免同一会话出现两份同名工具。
+- 重名防御两层：①挂载前读核心连接表，同一 `serverName` 已在 DSH 设置里连接的，以核心为准、跳过并记 warning——避免同一会话出现两份同名工具；②全局模式下 QQ 侧不再重挂一遍（同一 scope 里同名 `serverName` 会直接抛重复占用）。
 - server 挂了不连坐：`failOnStartupError: false` + 后台汇报结果，一个坏 server 不影响会话的其他能力。
 
-引导语（`butlerPrompt`）会作为 `qq-bot:butler` section（order 93）注入，让模型把工具和"照顾人"的场景对上：做完用一句话自然说结果，像朋友顺口提起，不像客服报菜单。
+引导语（`butlerPrompt`）会作为 `cura:butler` section（order 93，全局模式）或 `qq-bot:butler`（退回 QQ 模式）注入，让模型把工具和"照顾人"的场景对上：做完用一句话自然说结果，像朋友顺口提起，不像客服报菜单。
 
 ### lib/travel.js（出行 / 高德面板）
 
 面板第五页「出行 · 高德」把高德 MCP 的接入做成填一个 key：校验/打码、写本机 \`travel.json\`、真连一次（MCP 握手 → 工具列表 → 试调一个只读工具）并把过程与原文错误显示出来。
 
-- 配置来源两层：\`Config.butlerServers\`（手写 JSON） + \`travel.json\`（面板写，同名 server 以面板为准）。面板保存后**下一条 QQ 会话**就带上 \`amap\`，不用改 profile、不用重启宿主。
+- 配置来源两层：\`Config.butlerServers\`（手写 JSON） + \`travel.json\`（面板写，同名 server 以面板为准）。面板保存后**下一条消息**就带上 \`amap\`（挂的是根 ctx，所有会话都有），不用改 profile、不用重启宿主。
 - 地址两种写法：裸 key（16–64 位十六进制，自动拼 \`https://mcp.amap.com/mcp?key=…\`）或完整 MCP 地址（\`new URL()\` 校验后原样用）。
 - key 只以明文存本机 \`travel.json\`（gitignored、不进包），面板只回打码地址与末四位；「测试连接」的返回值同样不含完整 key。
 - 「测试连接」不做假成功：探针按 \`initialize\` → \`notifications/initialized\` → \`tools/list\` → 试调（优先 \`maps_weather\`，其次 \`maps_ip_location\`/\`maps_geo\`）走，超时 12 秒，结束时 DELETE 会话；哪一步失败就停在哪一步并把原始报错贴回面板。
-- DSH 主会话（对话框里）要用同一份能力，仍需在 DSH 设置 → MCP 连接里加同一个地址：本页只管 QQ 会话挂载与这份配置文件。
+- 插件自己把 `amap` 挂进所有会话，**不用**再去 DSH 设置 → MCP 连接里重复加一份。只有把 `careGlobal` 关掉（退回 QQ 专用）时，主对话框才需要手动加同一个地址。
 
 #### 常用坐标（面板里存，注入进会话）
 
 高德和瑞幸的定位工具其实都**不自己查位置**：`maps_ip_location` 的必填参数就是 `ip` 本身，瑞幸 `queryShopList` 也要求先给 `longitude`/`latitude`。所以「找附近有什么」这件事，缺的一直是**坐标从哪来**。
 
-这一页因此加了一张「常用坐标」卡：填地名 → `maps_geo` 查坐标（可带城市消除同名歧义）→ 挑一条存成「学校 / 家 / 公司」。存下的坐标以 `qq-bot:places`（order 94）作为**动态 context** 注入，面板保存后**下一条消息**就带上，不用重启——用静态 section 的话得等下一次 attach。
+这一页因此加了一张「常用坐标」卡：填地名 → `maps_geo` 查坐标（可带城市消除同名歧义）→ 挑一条存成「学校 / 家 / 公司」。存下的坐标以 `cura:places`（order 94，全局模式）/ `qq-bot:places`（退回 QQ 模式）作为**动态 context** 注入所有会话，面板保存后**下一条消息**就带上，不用重启——用静态 section 的话得等下一次 attach。
 
 - 注入形态：`【常用坐标】` + 每行「名字：经度,纬度（地址）」+ 一句「对不上就用 maps_geo 查、记得带 city、别猜」。没有存任何地点时整段不出现，不占额度。
 - 上限 20 条，按 `名字|坐标` 去重；坐标格式非法（不是 `经度,纬度`）的条目在读写两侧都会被丢掉，不写进提示。
@@ -165,8 +193,8 @@ PYTHONPATH=<你的目录>/engine <你的 python.exe> engine/.scratch/t_session.p
 - token 只以明文存本机 \`luckin.json\`（gitignored、不进包），面板只回打码串与末四位；全链路返回值都不含完整 token。
 - **有效期是估算**：token 本身不带到期时间，面板按「写入时间 + 30 天」算一个参考值并明确标注是估算，不当平台的承诺。
 - **探针绝不试调工具**：瑞幸工具集里有 \`createOrder\` 这种会真实扣费的，「测试连接」只做 \`initialize\` → \`notifications/initialized\` → \`tools/list\`，把工具名列表贴出来证明握手与鉴权都通了，不替用户下单。
-- 配置来源同样两层：\`Config.butlerServers\`（手写 JSON） + \`luckin.json\`（面板写，同名 server 以面板为准）。面板保存后**下一条 QQ 会话**就带上 \`my-coffee\`，不用改 profile、不用重启宿主。
-- DSH 主会话（对话框里）要用同一份能力，仍需在 DSH 设置 → MCP 连接里加 \`my-coffee\`：类型 \`streamablehttp\`、上面那个地址、请求头 \`Authorization: Bearer <token>\`。
+- 配置来源同样两层：\`Config.butlerServers\`（手写 JSON） + \`luckin.json\`（面板写，同名 server 以面板为准）。面板保存后**下一条消息**就带上 \`my-coffee\`（所有会话），不用改 profile、不用重启宿主。
+- 插件自己把 \`my-coffee\` 挂进所有会话，**不用**再去 DSH 设置里重复加。只有 \`careGlobal=false\` 时，主对话框才需要手动加：类型 \`streamablehttp\`、上面那个地址、请求头 \`Authorization: Bearer <token>\`。
 
 ### say.ps1（语音合成助手）
 
@@ -218,8 +246,9 @@ CI 在 `.github/workflows/test.yml`：每次 push 与 PR 都跑 Node 20 / 22 两
 - [ ] 手机健康数据导入：Apple Health export.zip / Health Connect 导出文件解析入库（本机解析，不上传）
 - [ ] DSH 设置页 Remote 面板（照 dsh-onebot settings-remote 契约）
 - [ ] QQ 语音通话里的语音导航：amap MCP 算路 + TTS 逐步播报（过渡方案 `say_aloud` 即可做）；真正的通话内导航等通话引擎 RX 复活后再做
-- [x] 管家面板页（高德先行）：面板填 key → 写 `travel.json` → QQ 会话自动挂 `amap`，带真连测试；其余 server 仍走 Config
-- [x] 管家面板第二页（瑞幸）：面板填 token → 写 `luckin.json` → QQ 会话自动挂 `my-coffee`，探针只握手不试调（避免误下单）
+- [x] 管家面板页（高德先行）：面板填 key → 写 `travel.json` → 自动挂 `amap`（所有会话），带真连测试；其余 server 仍走 Config
+- [x] 管家面板第二页（瑞幸）：面板填 token → 写 `luckin.json` → 自动挂 `my-coffee`（所有会话），探针只握手不试调（避免误下单）
+- [x] 生活关怀层（`lib/care.js`）：健康汇总 / 周期关怀 / 常用坐标 / 管家 MCP 从 QQ 会话解耦，挂到插件根 ctx，DSH 任何会话都能用；`careGlobal=false` 可退回旧行为
 - [ ] 管家面板通用化：butlerServers 可视化编辑 + 各 server 连接状态展示
 - [ ] 语音通话 RX 复活（等上游 KoishiRTC/oldhan13 解决 Windows 回放路由后，改一行配置即恢复）
 
