@@ -1,6 +1,6 @@
 {
   "name": "dsh-cura",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "type": "module",
   "main": "lib/index.js",
   "description": "生活关怀层（健康记录/周期关怀/常用坐标/出行与点单 MCP，全会话可用）+ QQ 伴生增强（拟人化情境表达规则库、语料、通话引擎大脑路由）",
