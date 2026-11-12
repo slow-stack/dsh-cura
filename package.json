@@ -56,6 +56,9 @@
     "@deepseek-ai/dsh-typert-protocol": ">=0.1.0-rc.6 <0.3.0",
     "@deepseek-ai/dsh-mcp-client": ">=0.1.0-rc.6 <0.3.0"
   },
+  "devDependencies": {
+    "@deepseek-ai/schemastery": "^3.19.0"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -66,5 +69,9 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "scripts": {
+    "test": "node tests/all.mjs",
+    "test:ci": "node tests/all.mjs"
   }
 }
