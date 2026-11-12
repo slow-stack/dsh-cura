@@ -29,4 +29,15 @@ jobs:
         run: npm install --omit=peer --no-audit --no-fund --package-lock=false
 
       - name: 跑单测
-        run: npm test
+        # 失败时把失败的断言抬成 annotation，省得去 Actions 里翻整段日志。
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            while IFS= read -r line; do
+              echo "::error::$line"
+            done < <(grep -E "^(========== FAIL|FAIL |[0-9]+ 套失败)" test.log | head -20)
+          fi
+          exit "$status"

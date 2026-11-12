@@ -53,12 +53,25 @@ eq('停用后 token 仍保存', L.loadLuckin(file)['my-coffee'].token, TOKEN);
 L.saveLuckin(file, { token: TOKEN });
 eq('再启用产出 server', Boolean(L.serverFromLuckin(file)), true);
 
-// createdAt 只在换 token 时刷新
-const created1 = L.loadLuckin(file)['my-coffee'].createdAt;
+// createdAt 只在换 token 时刷新。
+// 这里必须先把时间戳钉死成一个已知的旧值再断言：连写两次 luckin.json 完全可能落在
+// 同一毫秒内，直接拿「前后两次的 createdAt」比会让 assert 变成看机器快慢的掷骰子
+// （CI 的 Linux runner 上就这么红过一次）。
+const SEED = '2020-01-01T00:00:00.000Z';
+L.saveLuckin(file, { token: TOKEN });
+const seeded = JSON.parse(fs.readFileSync(file, 'utf8'));
+seeded['my-coffee'].createdAt = SEED;
+fs.writeFileSync(file, JSON.stringify(seeded, null, 2) + '\n', 'utf8');
+eq('种子时间戳就位', L.loadLuckin(file)['my-coffee'].createdAt, SEED);
 L.saveLuckin(file, { enabled: false });
-eq('只是停用不刷新 createdAt', L.loadLuckin(file)['my-coffee'].createdAt, created1);
+eq('只是停用不刷新 createdAt', L.loadLuckin(file)['my-coffee'].createdAt, SEED);
+L.saveLuckin(file, { enabled: true });
+eq('再启用也不刷新 createdAt', L.loadLuckin(file)['my-coffee'].createdAt, SEED);
+const before = Date.now();
 L.saveLuckin(file, { token: TOKEN + 'X' });
-ok('换 token 刷新 createdAt', L.loadLuckin(file)['my-coffee'].createdAt !== created1);
+const refreshed = L.loadLuckin(file)['my-coffee'].createdAt;
+ok('换 token 刷新了 createdAt', refreshed !== SEED, refreshed);
+ok('换 token 后的 createdAt 是刚写的', Date.parse(refreshed) >= before - 1000, refreshed);
 
 // 坏文件不抛
 fs.writeFileSync(file, '{ 坏 json', 'utf8');
