@@ -173,5 +173,10 @@ ok('演练时标签可以还不存在（拿当前检出点当终点）',
 ok('演练时检出的是分支而不是标签（标签可能还没建）',
   /github\.event\.inputs\.dry_run == 'true' && github\.ref_name \|\| github\.event\.inputs\.tag/.test(yml));
 
+// git log --pretty=format: 末尾不补换行，wc -l 会少数一条（6 条提交数出 5）。
+// 这个数会打在日志里，数错了看起来就像漏了提交。
+ok('提交条数用 rev-list --count 数，不用 wc -l 数文件',
+  /git rev-list --count/.test(yml) && !/wc -l < commits\.txt/.test(yml));
+
 console.log('\n' + (fail === 0 ? 'all release body tests passed ✓' : fail + ' 项失败'));
 if (fail) process.exitCode = 1;

@@ -199,7 +199,13 @@ jobs:
             git log --pretty=format:'%s' "$base" > commits.txt
           fi
           echo "previous=$prev" >> "$GITHUB_OUTPUT"
-          echo "共 $(wc -l < commits.txt) 条提交"
+          # 别用 wc -l 数 commits.txt：git log --pretty=format: 末尾不补换行，
+          # 5 条提交只会数出 4 条。rev-list --count 才是准的。
+          if [ -n "$prev" ]; then
+            echo "共 $(git rev-list --count "$prev..${base}") 条提交"
+          else
+            echo "共 $(git rev-list --count "$base") 条提交"
+          fi
 
       # 补发老标签时，那个 tag 的树里可能还没有这个脚本（脚本是后加的），
       # 就从默认分支取一份；取不到才退化成 GitHub 自动生成的说明。
