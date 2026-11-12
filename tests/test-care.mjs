@@ -118,6 +118,15 @@ assert.strictEqual(fake.calls[1].arg.order, 94);
 assert.strictEqual(fake.calls[1].arg.text(), '近 7 天', '渲染器要真的被接上');
 assert.strictEqual(fake.calls[2].arg.text(), '常用坐标');
 
+// 插值必须关掉：这段文本里有用户自己写的地名/备注，只要出现 {{x}} 形式，
+// 宿主 renderContextSections 就会抛 unknown prompt variable，整轮 pre-step 挂掉。
+// 不是「建议关」，是必须关——三条都要。
+assert.deepStrictEqual(
+  fake.calls.map((c) => c.arg.interpolate),
+  [false, false, false],
+  '每条关怀注入都必须显式 interpolate:false（防用户文本里的 {{}} 打崩 pre-step）',
+);
+
 // 单条失败不连坐：健康条目重名，其余两个仍要装上
 const logs = [];
 const partial = fakePrompt({ failOn: ['cura:health'] });
@@ -179,6 +188,16 @@ assert.ok(/未挂上任何条目/.test(bare), '全部失败时要有显式警告
 
 // 释放要接进卸载路径，否则热禁用插件后注入还在
 assert.ok(/CARE\.disposeCare\(careInstall\)/.test(bare), '卸载时要释放关怀层');
+
+// QQ 侧自己注册的五处也要关插值：回复规则正文与语料来自可编辑文件/面板，
+// 健康备注与地名同理——宿主对 section/context 一视同仁地插值。
+{
+  const registrations = [...bare.matchAll(/\.systemPrompt\.(?:section|context)\(\{([\s\S]*?)\}\)/g)].map((m) => m[1]);
+  assert.ok(registrations.length >= 5, `index.js 应有 5 处提示词注册，实际 ${registrations.length}`);
+  registrations.forEach((body, i) => {
+    assert.ok(/interpolate:\s*false/.test(body), `第 ${i + 1} 处提示词注册缺 interpolate:false：${body.trim().slice(0, 80)}`);
+  });
+}
 
 // 每个 mountButler 调用点都必须显式传目标数组：漏传会让 fiber 没人持有，
 // 卸载时放飞不掉（挂上去了却收不回来，热禁用插件后 server 还在）。
