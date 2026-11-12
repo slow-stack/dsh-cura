@@ -3,6 +3,9 @@ name: release
 # 推 v* 标签就发版：先跑双平台测试，再校验 tag 与 package.json 版本一致，
 # 然后 npm publish，最后用 .github/scripts/release-body.mjs 拼好的正文建 Release。
 # 正文格式固定成「描述 / 本次变更 / 安装 / 链接」四段，别在 workflow 里手改文案。
+#
+# 想先看效果再真发？手动触发时勾上 dry_run：标签可以还没建（就是拿来试格式的），
+# 照样跑测试与全部校验，把 Release 标题和正文打到日志里，但不碰 npm、不建 Release。
 on:
   push:
     tags:
@@ -10,19 +13,29 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: '要发版的标签（必须已经存在，例如 v0.9.1）'
+        description: '要发版的标签（演练模式下可以填一个还不存在的）'
         required: true
+      dry_run:
+        description: '只演练：不发 npm、不建 Release'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   id-token: write
 
+# 按「目标标签」而不是按 ref 分组：演练 v0.10.0 和真推 v0.10.0 落在同一组里，
+# 免得演练还没跑完，真发版就跟它抢同一个版本号。
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 env:
   RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+  DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+
+# 注意：env 上下文在 step 的 with: 里不可用，所以检出用的 ref 只能就地写表达式。
+# 演练时标签可能还不存在，只能检出当前分支；真实发版才检出标签本身。
 
 jobs:
   test:
@@ -35,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || github.ref_name }}
+          ref: ${{ github.event.inputs.dry_run == 'true' && github.ref_name || github.event.inputs.tag || github.ref_name }}
 
       - uses: actions/setup-node@v4
         with:
@@ -69,7 +82,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || github.ref_name }}
+          ref: ${{ github.event.inputs.dry_run == 'true' && github.ref_name || github.event.inputs.tag || github.ref_name }}
           fetch-depth: 0
 
       - uses: actions/setup-node@v4
@@ -109,8 +122,19 @@ jobs:
             echo "published=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: 演练模式：不发 npm
+        if: env.DRY_RUN == 'true'
+        run: |
+          name="$(node -p "require('./package.json').name")"
+          ver="$(node -p "require('./package.json').version")"
+          if [ "${{ steps.check.outputs.published }}" = "true" ]; then
+            echo "演练模式：本来会执行 npm publish --access public --provenance（$name@$ver），这次跳过"
+          else
+            echo "演练模式：$name@$ver 在 registry 上已经有了，真实发版也会跳过 publish"
+          fi
+
       - name: 发到 npm
-        if: steps.check.outputs.published == 'true'
+        if: steps.check.outputs.published == 'true' && env.DRY_RUN != 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -121,7 +145,7 @@ jobs:
           npm publish --access public --provenance
 
       - name: 发完回查一次
-        if: steps.check.outputs.published == 'true'
+        if: steps.check.outputs.published == 'true' && env.DRY_RUN != 'true'
         run: |
           ver="$(node -p "require('./package.json').version")"
           name="$(node -p "require('./package.json').name")"
@@ -148,7 +172,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || github.ref_name }}
+          ref: ${{ github.event.inputs.dry_run == 'true' && github.ref_name || github.event.inputs.tag || github.ref_name }}
           fetch-depth: 0
 
       - uses: actions/setup-node@v4
@@ -158,17 +182,30 @@ jobs:
       - name: 收集本次变更的提交
         id: commits
         run: |
+          # 演练模式下这个标签往往还没建（就是拿来试格式的），
+          # 那就用当前检出点当终点，照样能看出正文长什么样。
+          base="${RELEASE_TAG}"
+          if ! git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            echo "标签 ${RELEASE_TAG} 还不存在，用当前检出点代替"
+            base="HEAD"
+          fi
           # 找上一个 tag 作为比较起点；没有就列全部历史。
-          prev="$(git describe --tags --abbrev=0 "${RELEASE_TAG}^" 2>/dev/null || true)"
+          prev="$(git describe --tags --abbrev=0 "${base}^" 2>/dev/null || true)"
           if [ -n "$prev" ]; then
             echo "上一个 tag: $prev"
-            git log --pretty=format:'%s' "$prev..${RELEASE_TAG}" > commits.txt
+            git log --pretty=format:'%s' "$prev..${base}" > commits.txt
           else
             echo "没有上一个 tag，列出全部历史"
-            git log --pretty=format:'%s' "$RELEASE_TAG" > commits.txt
+            git log --pretty=format:'%s' "$base" > commits.txt
           fi
           echo "previous=$prev" >> "$GITHUB_OUTPUT"
-          echo "共 $(wc -l < commits.txt) 条提交"
+          # 别用 wc -l 数 commits.txt：git log --pretty=format: 末尾不补换行，
+          # 5 条提交只会数出 4 条。rev-list --count 才是准的。
+          if [ -n "$prev" ]; then
+            echo "共 $(git rev-list --count "$prev..${base}") 条提交"
+          else
+            echo "共 $(git rev-list --count "$base") 条提交"
+          fi
 
       # 补发老标签时，那个 tag 的树里可能还没有这个脚本（脚本是后加的），
       # 就从默认分支取一份；取不到才退化成 GitHub 自动生成的说明。
@@ -191,7 +228,17 @@ jobs:
             --out release-body.md \
             --title-out release-title.txt
 
+      - name: 演练模式：把标题与正文打出来
+        if: env.DRY_RUN == 'true'
+        run: |
+          echo "标题：$(cat release-title.txt)"
+          echo "---------- 正文开始 ----------"
+          cat release-body.md
+          echo "---------- 正文结束 ----------"
+          echo "演练模式：不建 Release。确认没问题就去推这个标签，同一条流水线会真发。"
+
       - name: 建 Release
+        if: env.DRY_RUN != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

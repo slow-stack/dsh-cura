@@ -282,6 +282,18 @@ npm install dsh-cura@0.9.1
 
 需要仓库里配 `NPM_TOKEN`（Settings → Secrets → Actions），权限是 npm 的 Automation token；`--provenance` 需要 workflow 的 `id-token: write`，已经在文件里给了。
 
+### 发版演练
+
+标签格式或正文想先看一眼再真发？手动触发时勾上 `dry_run`：
+
+```bash
+gh workflow run release.yml -f tag=v0.10.0 -f dry_run=true
+```
+
+演练模式照样跑完整测试和全部校验（版本号对不对得上、registry 上有没有、正文怎么拼），然后把 Release 标题和正文打在日志里，**不发 npm、不建 Release**。这时候标签可以还不存在——反正不发布，就是拿来看格式的；`git describe` 找不到就退回用当前检出点当终点。
+
+确认没问题，推同名标签，同一条流水线会真发。演练与真发按「目标标签」排队（不是按 ref），所以演练还没跑完时推标签不会两边抢同一个版本号。
+
 ## Roadmap
 
 - [x] 情境→表达规则库：LLM 从聊天记录抽取 `{"situation","style"}` 规则入库，按情境检索注入（MaiBot 1.x 模式）

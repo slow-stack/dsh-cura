@@ -160,5 +160,23 @@ ok('回查超时才算失败，不是首次没查到就失败',
 ok('回查只在上传过的那次跑（跳过 publish 时不该卡在回查）',
   /- name: 发完回查一次\s*\n\s*if: steps\.check\.outputs\.published == 'true'/.test(yml));
 
+// 演练模式：手动触发时可以只跑测试与校验、把正文打出来，不碰 npm 也不建 Release。
+// 少了这道闸，试标签格式就只能靠真发一版——版本号发出去就收不回来了。
+ok('workflow_dispatch 带 dry_run 开关', /workflow_dispatch:[\s\S]*?dry_run:[\s\S]*?type:\s*boolean/.test(yml));
+ok('dry_run 进到 env，后续步骤才读得到', /DRY_RUN:\s*\$\{\{\s*github\.event\.inputs\.dry_run/.test(yml));
+ok('演练时不发 npm', /- name: 发到 npm\s*\n\s*if: steps\.check\.outputs\.published == 'true' && env\.DRY_RUN != 'true'/.test(yml));
+ok('演练时也不回查（没发就没什么可查）', /- name: 发完回查一次\s*\n\s*if: steps\.check\.outputs\.published == 'true' && env\.DRY_RUN != 'true'/.test(yml));
+ok('演练时不建 Release', /- name: 建 Release\s*\n\s*if: env\.DRY_RUN != 'true'/.test(yml));
+ok('演练时把标题与正文打到日志里', /- name: 演练模式：把标题与正文打出来\s*\n\s*if: env\.DRY_RUN == 'true'\s*\n/.test(yml) && /cat release-body\.md/.test(yml));
+ok('演练时标签可以还不存在（拿当前检出点当终点）',
+  /refs\/tags\/\$\{RELEASE_TAG\}/.test(yml) && /base="HEAD"/.test(yml));
+ok('演练时检出的是分支而不是标签（标签可能还没建）',
+  /github\.event\.inputs\.dry_run == 'true' && github\.ref_name \|\| github\.event\.inputs\.tag/.test(yml));
+
+// git log --pretty=format: 末尾不补换行，wc -l 会少数一条（6 条提交数出 5）。
+// 这个数会打在日志里，数错了看起来就像漏了提交。
+ok('提交条数用 rev-list --count 数，不用 wc -l 数文件',
+  /git rev-list --count/.test(yml) && !/wc -l < commits\.txt/.test(yml));
+
 console.log('\n' + (fail === 0 ? 'all release body tests passed ✓' : fail + ' 项失败'));
 if (fail) process.exitCode = 1;
