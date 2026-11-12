@@ -1,0 +1,32 @@
+name: test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # 只装测试真正需要的：lib/index.js 顶层 import 了 @deepseek-ai/schemastery。
+      # 另三个 peer（dsh-tools / dsh-typert-protocol / dsh-mcp-client）故意不装——
+      # rules-remote 的降级路径正是测试要覆盖的形状，装上了反而测不到。
+      # --omit=peer 是必须的：不写它 npm 会把四个 peer 全拉下来，降级路径就消失了。
+      - name: 安装依赖
+        run: npm install --omit=peer --no-audit --no-fund --package-lock=false
+
+      - name: 跑单测
+        run: npm test

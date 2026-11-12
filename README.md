@@ -187,6 +187,29 @@ sttCommand: <你的python.exe>   # 需要 faster-whisper
 sttArgs: ["<插件目录>/stt-whisper.py", "--file", "{file}", "--out", "{out}"]
 ```
 
+## 开发
+
+```bash
+npm install          # 只是跑测试用的开发依赖（@deepseek-ai/schemastery）
+npm test             # 一次跑完六套单测
+npm test -- travel   # 只跑指定的（rules / cycle / plugin / travel / luckin / remote）
+```
+
+六套单测都在 `tests/`，全部直接驱动 `lib/` 里的生产函数（不 mock 掉被测对象），覆盖：
+
+| 套件 | 管什么 |
+|---|---|
+| `test-rules.mjs` | 规则库纯逻辑：抽取、检索打分、种子规则 |
+| `test-cycle.mjs` | 健康日志聚合 + 周期推算的纯函数 |
+| `test-plugin.mjs` | 装载面：`inject` 必须含 `tools`、`resolveDshHome` 三级优先级、大脑回退与冷却、`assistant.source` 契约 |
+| `test-remote.mjs` | 宿主行服务全方法（stub cordis ctx 直测）+ 学习链路 + 出行/瑞幸接线 |
+| `test-travel.mjs` | 高德 key 收敛与打码、MCP 探针（真起 127.0.0.1 假 server）、常用坐标、`placesPrompt` |
+| `test-luckin.mjs` | 瑞幸 token 收敛、到期推算、探针带 `Authorization` 且**绝不试调**（防误下单） |
+
+不联网：所有 MCP 交互都打本机 `127.0.0.1` 上的假服务端；临时文件一律落系统临时目录，不往仓库里写。
+
+CI 在 `.github/workflows/test.yml`：每次 push 与 PR 都跑 Node 20 / 22 两档。安装依赖特意用 `npm install --omit=peer`——只装 `schemastery`，另外三个 peer 故意缺席，因为 `rules-remote` 的降级路径正是测试要覆盖的形状（装上反而测不到）。
+
 ## Roadmap
 
 - [x] 情境→表达规则库：LLM 从聊天记录抽取 `{"situation","style"}` 规则入库，按情境检索注入（MaiBot 1.x 模式）
