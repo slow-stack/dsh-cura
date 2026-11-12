@@ -26,11 +26,11 @@ QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留�
 | 人设补充注入 | ✅ | `chatPersona` 文本随规则一同注入 |
 | 语料库 | ✅ 基础版 | `corpus/` 目录的 txt/jsonl 作为"说话风格示例"轮换注入 |
 | 情境表达规则库 | ✅ | MaiBot 式"情境→表达"规则：全局说话方式+反面清单进 system prompt 段，情境规则每轮按最近用户消息检索注入（`systemPrompt.context`，官方动态上下文）；规则库 `rules.json` 人工可编辑、改完即生效，无需重启 |
-| 规则库管理面板（DSH 内） | ✅ | DSH 左侧侧边栏新增 "Cura" 入口（内含「表达规则 / 语音通话 / 健康日志 / 周期关怀 / 出行 · 高德 / 瑞幸 · 点单」六页）（`sidebar.panellist` + `main` keyed slot，浏览器半侧 `lib/client.js`）：增删改查、启用/停用、手动学习、导出 JSON；数据走 Typert Remote（`curaRules` 命名空间，宿主行 `lib/rules-remote.js`，独立 patch 行），不依赖任何独立本地服务 |
+| 规则库管理面板（DSH 内） | ✅ | DSH 左侧侧边栏新增 "Cura" 入口（内含「表达规则 / 语音通话 / 健康日志 / 周期关怀 / 出行 · 高德 / 瑞幸 · 点单」六页，瑞幸页为 🧪 beta）（`sidebar.panellist` + `main` keyed slot，浏览器半侧 `lib/client.js`）：增删改查、启用/停用、手动学习、导出 JSON；数据走 Typert Remote（`curaRules` 命名空间，宿主行 `lib/rules-remote.js`，独立 patch 行），不依赖任何独立本地服务 |
 | 规则自动学习 | ✅ | 定时（默认 6h）从对话事件流抽取新规则：LLM 抽取 → 本地去重审查（情境 bigram 相似 + 关键词重合）→ 入库；首跑只建游标不学习，库满自动停；学习引擎在 rules-remote 行（单一写方），面板可手动触发 |
 | 健康日志（男女通用） | ✅ | 面板「健康日志」页手动记，或在 QQ 聊天里说（agent 的 `health_log` 工具自动抽取记录：睡眠/运动/情绪/备注）；近 7 天汇总 + 关注目标每轮注入会话，Cura 会顺势劝早睡/夸坚持。数据只存本机 `health.json`（gitignored） |
 | 周期关怀（可选，默认关） | ✅ | 健康模块的子功能：面板「周期关怀」页开启后，按末次月经+周期长度估算四阶段（月经/卵泡/排卵/黄体），今日阶段+相处建议每轮注入会话——经期多照顾、卵泡期推学习、排卵期排表达类任务、经前别硬催；阶段建议可在面板改。数据只存本机 `health.json`，生活方式参考而非医疗建议 |
-| 管家工具（butler） | ✅ | 把外部 MCP server（瑞幸下单、高德地图、天气……）挂进 QQ 会话，Agent 能在现实里照顾人而不只是虚拟关怀。只挂本会话、不与 DSH 设置/ds-bot 的连接管理冲突（见下方组件说明）；server 清单在 Config `butlerServers` 配（默认空 = 关）；高德另有面板「出行 · 高德」页、瑞幸有「瑞幸 · 点单」页，填 key/token 即写 `travel.json` / `luckin.json`、下一条 QQ 会话生效 |
+| 管家工具（butler） | ✅ | 把外部 MCP server（瑞幸下单、高德地图、天气……）挂进 QQ 会话，Agent 能在现实里照顾人而不只是虚拟关怀。只挂本会话、不与 DSH 设置/ds-bot 的连接管理冲突（见下方组件说明）；server 清单在 Config `butlerServers` 配（默认空 = 关）；高德另有面板「出行 · 高德」页、瑞幸有「瑞幸 · 点单」页（🧪 beta，见下），填 key/token 即写 `travel.json` / `luckin.json`、下一条 QQ 会话生效 |
 | 语音合成助手 | ✅ | `say.ps1`：edge-tts（自然，云）失败自动换 Windows 离线 SAPI（稳定，本地）。agent 用 shell 调它生成音频，再用 `qq_send_voice`（dsh-onebot 自带）发送——职责不重叠 |
 | STT 包装器 | ✅ | `stt-whisper.py`：faster-whisper 包装，适配 dsh-onebot 的 `custom` STT 引擎（`{file}`/`{out}` 模板） |
 | 语音通话引擎托管 | 🧪 beta | 托管一个 Python 通话引擎（自动接听/对话/挂断，基于 [KoishiRTC](https://github.com/Touch-Night/KoishiRTC) 系桥）。QQ 通话里"对方声音回放路由"在 Windows 上暂无可靠解（上游待验证），代码完整保留，随时可复活。<br>**标 beta 的是 DSH 内语音对话（`voice_chat`）**：已能整通跑（采集→ASR→大脑→TTS→播放），但依赖本机麦克风/扬声器与 Python 侧依赖，首次使用往往要调设备，失败率不低，故按 beta 发布；QQ 通话那半条仍是搁置 |
@@ -144,7 +144,9 @@ PYTHONPATH=<你的目录>/engine <你的 python.exe> engine/.scratch/t_session.p
 - 「测试连接」不做假成功：探针按 \`initialize\` → \`notifications/initialized\` → \`tools/list\` → 试调（优先 \`maps_weather\`，其次 \`maps_ip_location\`/\`maps_geo\`）走，超时 12 秒，结束时 DELETE 会话；哪一步失败就停在哪一步并把原始报错贴回面板。
 - DSH 主会话（对话框里）要用同一份能力，仍需在 DSH 设置 → MCP 连接里加同一个地址：本页只管 QQ 会话挂载与这份配置文件。
 
-### lib/luckin.js（瑞幸 / 咖啡面板）
+### lib/luckin.js（瑞幸 / 咖啡面板 · 🧪 beta）
+
+> **beta**：这一页的 token 保存、MCP 握手、工具列表都已实测通过，但**真实下单流程一次也没跑过**（没拿真 token 走过 `createOrder` → 支付 → 取餐）。所以按 beta 发布，出错概率未知，面板上也挂了同样的提示。
 
 面板第六页「瑞幸 · 点单」把瑞幸 AI 开放平台的 MCP 接入做成填一个 token：校验/打码、写本机 \`luckin.json\`、真连一次（MCP 握手 → 工具列表）并把过程与原文错误显示出来。
 
