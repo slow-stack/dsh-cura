@@ -47,9 +47,17 @@
 
 ## 安装（Windows + DSH 桌面版）
 
-> 需要已装好 [dsh-onebot-qq](https://github.com/NapNeko/dsh-onebot-qq)、Node.js ≥ 20，并有一条能用的 QQ 通道。
+> 需要 Node.js ≥ 20。QQ 伴生层是**可选**的——只想要生活关怀层（健康、周期、常用坐标、高德/瑞幸）的话不用装 [dsh-onebot-qq](https://github.com/NapNeko/dsh-onebot-qq)。
 
-### 方式一：npm（推荐）
+### 方式一：dsh plugin（推荐）
+
+```powershell
+dsh plugin --profile web add dsh-cura
+```
+
+`--profile` 换成你实际在用的 profile（默认 `web`）。这条命令会在 profile 目录里装包并把插件登记进 bundles，装完重启 DSH 即可。
+
+### 方式二：npm 手动装
 
 1. 进 DSH profile 目录装（默认 profile 一般是 `~/.dsh/profiles/desktop`，装了多个 profile 时就选你用的那个）：
    ```powershell
@@ -64,7 +72,7 @@
 
 包的默认路径（`rules.json` / `health.json` / `voice.json` / `corpus/` / `say.ps1` / `stt-whisper.py`）全部按**插件包根目录**推导，装在哪个盘都不用改；要挪到别处（比如放自己的数据盘）在 profile 层覆盖即可。
 
-### 方式二：从源码（要改代码/跟 main 走时用）
+### 方式三：从源码（要改代码/跟 main 走时用）
 
 1. 把仓库克隆到固定位置：
    ```powershell
