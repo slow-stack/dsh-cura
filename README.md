@@ -30,7 +30,7 @@ QQ ⇄ NapCat ⇄ dsh-onebot-qq（消息流 + STT + qq_* 工具，原样保留�
 | 规则自动学习 | ✅ | 定时（默认 6h）从对话事件流抽取新规则：LLM 抽取 → 本地去重审查（情境 bigram 相似 + 关键词重合）→ 入库；首跑只建游标不学习，库满自动停；学习引擎在 rules-remote 行（单一写方），面板可手动触发 |
 | 健康日志（男女通用） | ✅ | 面板「健康日志」页手动记，或在 QQ 聊天里说（agent 的 `health_log` 工具自动抽取记录：睡眠/运动/情绪/备注）；近 7 天汇总 + 关注目标每轮注入会话，Cura 会顺势劝早睡/夸坚持。数据只存本机 `health.json`（gitignored） |
 | 周期关怀（可选，默认关） | ✅ | 健康模块的子功能：面板「周期关怀」页开启后，按末次月经+周期长度估算四阶段（月经/卵泡/排卵/黄体），今日阶段+相处建议每轮注入会话——经期多照顾、卵泡期推学习、排卵期排表达类任务、经前别硬催；阶段建议可在面板改。数据只存本机 `health.json`，生活方式参考而非医疗建议 |
-| 管家工具（butler） | ✅ | 把外部 MCP server（瑞幸下单、高德地图、天气……）挂进 QQ 会话，Agent 能在现实里照顾人而不只是虚拟关怀。只挂本会话、不与 DSH 设置/ds-bot 的连接管理冲突（见下方组件说明）；server 清单在 Config `butlerServers` 配（默认空 = 关）；高德另有面板「出行 · 高德」页、瑞幸有「瑞幸 · 点单」页（🧪 beta，见下），填 key/token 即写 `travel.json` / `luckin.json`、下一条 QQ 会话生效 |
+| 管家工具（butler） | ✅ | 把外部 MCP server（瑞幸下单、高德地图、天气……）挂进 QQ 会话，Agent 能在现实里照顾人而不只是虚拟关怀。只挂本会话、不与 DSH 设置/ds-bot 的连接管理冲突（见下方组件说明）；server 清单在 Config `butlerServers` 配（默认空 = 关）；高德另有面板「出行 · 高德」页、瑞幸有「瑞幸 · 点单」页（🧪 beta，见下），填 key/token 即写 `travel.json` / `luckin.json`、下一条 QQ 会话生效；高德页还能把「学校 / 家」这类常用坐标存下来，以 `qq-bot:places` 注入会话，模型算「附近」时不用再反问你在哪 |
 | 语音合成助手 | ✅ | `say.ps1`：edge-tts（自然，云）失败自动换 Windows 离线 SAPI（稳定，本地）。agent 用 shell 调它生成音频，再用 `qq_send_voice`（dsh-onebot 自带）发送——职责不重叠 |
 | STT 包装器 | ✅ | `stt-whisper.py`：faster-whisper 包装，适配 dsh-onebot 的 `custom` STT 引擎（`{file}`/`{out}` 模板） |
 | 语音通话引擎托管 | 🧪 beta | 托管一个 Python 通话引擎（自动接听/对话/挂断，基于 [KoishiRTC](https://github.com/Touch-Night/KoishiRTC) 系桥）。QQ 通话里"对方声音回放路由"在 Windows 上暂无可靠解（上游待验证），代码完整保留，随时可复活。<br>**标 beta 的是 DSH 内语音对话（`voice_chat`）**：已能整通跑（采集→ASR→大脑→TTS→播放），但依赖本机麦克风/扬声器与 Python 侧依赖，首次使用往往要调设备，失败率不低，故按 beta 发布；QQ 通话那半条仍是搁置 |
@@ -143,6 +143,16 @@ PYTHONPATH=<你的目录>/engine <你的 python.exe> engine/.scratch/t_session.p
 - key 只以明文存本机 \`travel.json\`（gitignored、不进包），面板只回打码地址与末四位；「测试连接」的返回值同样不含完整 key。
 - 「测试连接」不做假成功：探针按 \`initialize\` → \`notifications/initialized\` → \`tools/list\` → 试调（优先 \`maps_weather\`，其次 \`maps_ip_location\`/\`maps_geo\`）走，超时 12 秒，结束时 DELETE 会话；哪一步失败就停在哪一步并把原始报错贴回面板。
 - DSH 主会话（对话框里）要用同一份能力，仍需在 DSH 设置 → MCP 连接里加同一个地址：本页只管 QQ 会话挂载与这份配置文件。
+
+#### 常用坐标（面板里存，注入进会话）
+
+高德和瑞幸的定位工具其实都**不自己查位置**：`maps_ip_location` 的必填参数就是 `ip` 本身，瑞幸 `queryShopList` 也要求先给 `longitude`/`latitude`。所以「找附近有什么」这件事，缺的一直是**坐标从哪来**。
+
+这一页因此加了一张「常用坐标」卡：填地名 → `maps_geo` 查坐标（可带城市消除同名歧义）→ 挑一条存成「学校 / 家 / 公司」。存下的坐标以 `qq-bot:places`（order 94）作为**动态 context** 注入，面板保存后**下一条消息**就带上，不用重启——用静态 section 的话得等下一次 attach。
+
+- 注入形态：`【常用坐标】` + 每行「名字：经度,纬度（地址）」+ 一句「对不上就用 maps_geo 查、记得带 city、别猜」。没有存任何地点时整段不出现，不占额度。
+- 上限 20 条，按 `名字|坐标` 去重；坐标格式非法（不是 `经度,纬度`）的条目在读写两侧都会被丢掉，不写进提示。
+- 这几条不改任何工具行为：模型仍可调 `maps_geo` / `maps_around_search` / 瑞幸 `queryShopList`，只是手上先有了一组「她亲口存过的」坐标，不至于每轮反问她「你在哪」。
 
 ### lib/luckin.js（瑞幸 / 咖啡面板 · 🧪 beta）
 
