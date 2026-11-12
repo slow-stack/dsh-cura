@@ -151,5 +151,14 @@ ok('release.yml 先测试后发版', /needs:\s*\[test\]/.test(yml));
 ok('Release 等 publish 完成才建', /needs:\s*\[test, publish\]/.test(yml));
 ok('重复打同一个 tag 不会重复建 Release', /gh release view/.test(yml) && /已存在/.test(yml));
 
+// 回查窗口：npm 官方会说 "may take a few minutes to become available"，
+// 等 30 秒就把 CDN 抖动误判成发版失败（0.9.0 真踩过）。
+ok('发完回查给了分钟级窗口，且查询绕过 CDN 缓存',
+  /seq 1 24/.test(yml) && /--prefer-online/.test(yml) && /sleep 10/.test(yml));
+ok('回查超时才算失败，不是首次没查到就失败',
+  /for i in \$\(seq 1 24\); do/.test(yml) && /exit 1/.test(yml));
+ok('回查只在上传过的那次跑（跳过 publish 时不该卡在回查）',
+  /- name: 发完回查一次\s*\n\s*if: steps\.check\.outputs\.published == 'true'/.test(yml));
+
 console.log('\n' + (fail === 0 ? 'all release body tests passed ✓' : fail + ' 项失败'));
 if (fail) process.exitCode = 1;
