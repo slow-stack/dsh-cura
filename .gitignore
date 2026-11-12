@@ -42,3 +42,6 @@ travel.json
 
 # gh CLI 本地状态（含设备标识），不入库
 .local/
+
+# 瑞幸页写入的 token（本机私有，绝不入库/入包）
+luckin.json
