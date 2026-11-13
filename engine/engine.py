@@ -467,8 +467,17 @@ class Brain:
         self.cfg = cfg
         self._whisper = None
         llm = cfg["llm"]
-        self._llm_base = _check_llm_url(llm.get("baseUrl", "https://api.deepseek.com"),
-                                        bool(llm.get("allowPrivate", False)))
+        # 大脑地址优先级：DSH 插件注入的环境变量 > config.json 的 llm.baseUrl。
+        # 插件把代理挂在宿主 webServer 上（/cura/v1），端口随 DSH 而变，所以由插件
+        # 在拉起本进程时通过 CURA_BRAIN_URL / CURA_BRAIN_TOKEN 告知；config.json 里的
+        # 8765 是老版本自开端口时填的，现在只剩「用户自带 OpenAI 兼容端点」这一个用途。
+        env_base = (os.environ.get("CURA_BRAIN_URL") or "").strip()
+        self._from_plugin = bool(env_base)
+        base_url = env_base or llm.get("baseUrl", "https://api.deepseek.com")
+        allow_private = bool(llm.get("allowPrivate", False)) or self._from_plugin
+        self._llm_base = _check_llm_url(base_url, allow_private)
+        if self._from_plugin:
+            log.info("大脑地址来自 DSH 插件: %s", self._llm_base)
 
     def _load_whisper(self):
         if self._whisper is None:
@@ -523,7 +532,10 @@ class Brain:
 
     def reply(self, history: list[dict]) -> str:
         llm = self.cfg["llm"]
-        api_key = llm.get("apiKey") or os.environ.get("LLM_API_KEY", "")
+        # 插件模式（CURA_BRAIN_URL 已注入）优先用插件现生成的 token：
+        # 那个 token 每次 DSH 启动都换，不落盘，写死在 config.json 里既过期也没意义。
+        plugin_token = (os.environ.get("CURA_BRAIN_TOKEN") or "").strip() if self._from_plugin else ""
+        api_key = plugin_token or llm.get("apiKey") or os.environ.get("LLM_API_KEY", "")
         if not api_key:
             raise RuntimeError("缺少 LLM API key：请在 config.json 填 llm.apiKey 或设 LLM_API_KEY 环境变量")
         payload = {

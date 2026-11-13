@@ -110,7 +110,7 @@ dsh plugin --profile web add dsh-cura
 
 ### engine/（Python 语音通话引擎）
 
-QQ 语音通话与 DSH 内语音对话的 Python 侧：采集（sounddevice，WDM-KS 优先）→ VAD/断句 → faster-whisper ASR → 大脑（8765 或 DSH）→ TTS → 播放，含打断（barge-in）。
+QQ 语音通话与 DSH 内语音对话的 Python 侧：采集（sounddevice，WDM-KS 优先）→ VAD/断句 → faster-whisper ASR → 大脑（DSH 的 `/cura/v1` 路由，或用户自填的 OpenAI 兼容端点）→ TTS → 播放，含打断（barge-in）。
 
 之前它散在工作区里、不是 git 仓库，现在整目录收进本仓库，只有源码与维护中的测试入库：
 
