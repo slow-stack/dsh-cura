@@ -254,10 +254,10 @@ CI 在 `.github/workflows/test.yml`：每次 push 与 PR 都跑 Node 20 / 22 两
 
 ```bash
 npm version patch --no-git-tag-version   # 或 minor / major，改 package.json
-git commit -am "chore: 发版 0.9.1"
+git commit -am "chore: 发版 0.9.2"
 git push
-git tag -a v0.9.1 -m "v0.9.1"
-git push origin v0.9.1                   # ← 这一步触发整个流程
+git tag -a v0.9.2 -m "v0.9.2"
+git push origin v0.9.2                   # ← 这一步触发整个流程
 ```
 
 流程分三段，任何一段红了后面都不跑：
@@ -278,15 +278,15 @@ Release 的正文格式固定成四段，由 `.github/scripts/release-body.mjs` 
 ## 安装
 ```powershell
 cd <DSH profile 目录>
-npm install dsh-cura@0.9.1
+npm install dsh-cura@0.9.2
 ```
 
 ## 链接
-- npm：https://www.npmjs.com/package/dsh-cura/v/0.9.1
-- 提交对比：…/compare/v0.9.0...v0.9.1
+- npm：https://www.npmjs.com/package/dsh-cura/v/0.9.2
+- 提交对比：…/compare/v0.9.1...v0.9.2
 ````
 
-想给某一版写人话（推荐），加一个 `release-notes/v0.9.1.md`：第一行写 `# 标题`，标题就用它、其余进「本次变更」；不写标题就整份进正文。有这个文件就不再列提交。
+想给某一版写人话（推荐），加一个 `release-notes/v0.9.2.md`：第一行写 `# 标题`，标题就用它、其余进「本次变更」；不写标题就整份进正文。有这个文件就不再列提交。
 
 需要仓库里配 `NPM_TOKEN`（Settings → Secrets → Actions），权限是 npm 的 Automation token；`--provenance` 需要 workflow 的 `id-token: write`，已经在文件里给了。
 
