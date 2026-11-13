@@ -151,12 +151,45 @@ ok('release.yml 先测试后发版', /needs:\s*\[test\]/.test(yml));
 ok('Release 等 publish 完成才建', /needs:\s*\[test, publish\]/.test(yml));
 ok('重复打同一个 tag 不会重复建 Release', /gh release view/.test(yml) && /已存在/.test(yml));
 
-// 回查窗口：npm 官方会说 "may take a few minutes to become available"，
-// 等 30 秒就把 CDN 抖动误判成发版失败（0.9.0 真踩过）。
+// ---------- 回查窗口的换算 ----------
+// 窗口时长不写在单词里，是从「重试次数 × 间隔秒数」推出来的：
+// 有人只改循环次数、忘了改文案，断言会当场报出来。
+function retryCount(src) {
+  const m = /for i in \$\(seq 1 (\d+)\); do/.exec(src);
+  return m ? Number(m[1]) : NaN;
+}
+function retryStepSeconds(src) {
+  const m = /sleep (\d+)/.exec(src);
+  return m ? Number(m[1]) : NaN;
+}
+function readVerifyWindowMinutes(src) {
+  const n = retryCount(src), step = retryStepSeconds(src);
+  if (!Number.isFinite(n) || !Number.isFinite(step)) return NaN;
+  return (n * step) / 60;
+}
+function windowFailText(src) {
+  const m = /::error::[^\n]*?(\d+) 分钟后 registry/.exec(src);
+  return m ? Number(m[1]) : NaN;
+}
+function retryLabelN(src) {
+  const m = /第 \$i\/(\d+) 次没查到/.exec(src);
+  return m ? Number(m[1]) : NaN;
+}
+
+// 回查窗口：npm 官方会说 "may take a few minutes to become available"。
+// 0.9.0 等 30 秒就判失败；0.9.2 等满 4 分钟仍被判失败，而包其实在 4 分 11 秒
+// 就上去了——窗口比 CDN 抖动的上限还紧，发版会随机假红。所以窗口要有余量。
 ok('发完回查给了分钟级窗口，且查询绕过 CDN 缓存',
-  /seq 1 24/.test(yml) && /--prefer-online/.test(yml) && /sleep 10/.test(yml));
+  /seq 1 \d+/.test(yml) && /--prefer-online/.test(yml) && /sleep 10/.test(yml));
 ok('回查超时才算失败，不是首次没查到就失败',
-  /for i in \$\(seq 1 24\); do/.test(yml) && /exit 1/.test(yml));
+  /for i in \$\(seq 1 \d+\); do/.test(yml) && /exit 1/.test(yml));
+{
+  const window = readVerifyWindowMinutes(yml);
+  ok('回查窗口至少 10 分钟（4 分钟把 0.9.2 判成了假失败）', window >= 10, '读到 ' + window + ' 分钟');
+  ok('重试上限与失败文案里的分钟数对得上',
+    windowFailText(yml) === window, '文案说 ' + windowFailText(yml) + ' 分钟，循环是 ' + window + ' 分钟');
+  ok('重试上限与日志里的 i/N 对得上', retryLabelN(yml) === retryCount(yml), 'N=' + retryLabelN(yml) + ' 实际=' + retryCount(yml));
+}
 ok('回查只在上传过的那次跑（跳过 publish 时不该卡在回查）',
   /- name: 发完回查一次\s*\n\s*if: steps\.check\.outputs\.published == 'true'/.test(yml));
 

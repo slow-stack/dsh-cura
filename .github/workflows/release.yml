@@ -150,18 +150,19 @@ jobs:
           ver="$(node -p "require('./package.json').version")"
           name="$(node -p "require('./package.json').name")"
           # registry 有 CDN 延迟，npm 自己会说 "may take a few minutes to become
-          # available"。第一次发 0.9.0 时只等 30 秒就判失败，其实包是发成功的
-          # ——等太短会把 CDN 抖动当成发版失败，等太久又把真失败拖成十分钟。
-          # 现在给 4 分钟（24 × 10s），超过这个数就是真没上去。
-          for i in $(seq 1 24); do
+          # available"。0.9.0 只等 30 秒就判失败；0.9.2 等满 4 分钟（24 × 10s）
+          # 仍然判失败，而包其实在 4 分 11 秒就上去了——只差了 11 秒。
+          # 4 分钟的窗口比 CDN 的实际抖动还紧，所以放到 10 分钟（60 × 10s）。
+          # 10 分钟还查不到才当作「真的没上去」，这时已经不是 CDN 延迟的问题了。
+          for i in $(seq 1 60); do
             if npm view "$name@$ver" version --prefer-online >/dev/null 2>&1; then
               echo "$name@$ver 已在 registry 上（第 $i 次查询命中）"
               exit 0
             fi
-            echo "第 $i/24 次没查到，10 秒后重试"
+            echo "第 $i/60 次没查到，10 秒后重试"
             sleep 10
           done
-          echo "::error::npm publish 报告成功，但 4 分钟后 registry 上仍查不到 $name@$ver"
+          echo "::error::npm publish 报告成功，但 10 分钟后 registry 上仍查不到 $name@$ver（这已经不是 CDN 延迟了）"
           exit 1
 
   release:
