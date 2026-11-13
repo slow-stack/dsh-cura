@@ -12,6 +12,7 @@ const SUITES = [
   ['rules', 'test-rules.mjs'],
   ['cycle', 'test-cycle.mjs'],
   ['plugin', 'test-plugin.mjs'],
+  ['brain', 'test-brain.mjs'],
   ['care', 'test-care.mjs'],
   ['travel', 'test-travel.mjs'],
   ['luckin', 'test-luckin.mjs'],

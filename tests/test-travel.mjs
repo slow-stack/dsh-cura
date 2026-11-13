@@ -282,4 +282,14 @@ ok('locate 连不上不假装成功', locDead.ok === false && String(locDead.err
 fs.rmSync(dir, { recursive: true, force: true });
 console.log('\n' + pass + ' PASS / ' + fail + ' FAIL');
 if (fail) { console.log('TRAVEL TESTS FAILED'); process.exit(1); }
+// ---------- 10. 探针自报的客户端版本跟 package.json 走 ----------
+// 以前这里手抄 '0.9.0'，连着三个版本没跟上，高德收到的版本号一直是错的。
+{
+  const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const src = fs.readFileSync(new URL('../lib/travel.js', import.meta.url), 'utf8');
+  ok('clientInfo 版本不再手抄字面量', !/version:\s*'\d+\.\d+\.\d+'/.test(src));
+  ok('clientInfo 用 PKG_VERSION', /clientInfo:\s*\{\s*name:\s*'dsh-cura',\s*version:\s*PKG_VERSION\s*\}/.test(src));
+  ok('package.json 读得到版本号', /^\d+\.\d+\.\d+/.test(String(pkg.version || '')), 'got ' + pkg.version);
+}
+
 console.log('all travel tests passed ✓');

@@ -95,6 +95,14 @@ copy config.example.json config.json
 #   tokenFile  → <安装目录>\runtime\control.token
 ```
 
+> 由 DSH 插件托管启动时，上面 llm 那一段**不用填**：插件会通过环境变量
+> `CURA_BRAIN_URL`（宿主 webServer 上的 `/cura/v1` 路由）与 `CURA_BRAIN_TOKEN`
+> 把地址和凭据传进来，优先级高于 config.json。
+>
+> 单独跑引擎（不经插件）时**别再指向 `/cura/v1`**：那条路由要插件进程内现生成的
+> token，你手里没有，会收到 401。这种场景把 `llm.baseUrl` 指向你自己的
+> OpenAI 兼容端点（并填 `llm.apiKey`），或者干脆在 DSH 里用 `voice_chat` 工具。
+
 ### 7. 跑通验收链
 
 ```powershell

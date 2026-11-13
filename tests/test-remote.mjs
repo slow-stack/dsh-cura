@@ -118,10 +118,17 @@ const ctx3 = {
   reflect: { provide() {} },
   effect(fn) { const out = fn(); if (typeof out === 'function') effects.push(out); },
   logger: () => ({ info() {}, warn() {}, error() {} }),
+  // 大脑代理挂在宿主 webServer 上，端口由宿主决定；面板显示必须跟着 origin 走，
+  // 而不是读插件配置里那个已废弃的 port（读它就等于把面板钉死在一个不存在的端口上）。
+  get(name) {
+    if (name !== 'webServer') return undefined;
+    return { getOrigin: () => 'http://127.0.0.1:28641' };
+  },
   configEditor: {
     entries: () => [{
       options: {
         id: 'dsh-cura',
+        // 故意填一个假的 port：面板不能读它，读了就会显示 8765
         config: { port: 8765, sayScript: path.join(VOICE_DIR, 'say.ps1'), enginePython: '', engineDir: '' },
       },
     }],
@@ -129,7 +136,8 @@ const ctx3 = {
 };
 const svcVoice = new Service(ctx3, { rulesFile: RULES_FILE, targetUser: '' });
 const vi = await svcVoice.getVoiceInfo();
-assert.strictEqual(vi.proxy.port, 8765, '端口取自主插件配置');
+assert.strictEqual(vi.proxy.port, 28641, '端口取自宿主 webServer 的 origin，不是插件配置里的 port');
+assert.strictEqual(vi.proxy.url, 'http://127.0.0.1:28641/cura/v1', '代理地址是宿主 origin + 插件前缀');
 assert.strictEqual(typeof vi.proxy.alive, 'boolean', '代理探活字段存在');
 assert.strictEqual(vi.engine.managed, false, '未配置引擎 → managed false');
 assert.strictEqual(vi.tts.length, 4, '四保险链四行');
@@ -140,7 +148,9 @@ assert.ok(vi.sayScript.startsWith(VOICE_DIR), 'sayScript 用配置里的值');
 fs.rmSync(VOICE_DIR, { recursive: true, force: true });
 const noEditor = new Service({ reflect: { provide() {} }, effect() {}, logger: () => ({ info() {}, warn() {}, error() {} }) }, { rulesFile: RULES_FILE, targetUser: '' });
 const vi2 = await noEditor.getVoiceInfo();
-assert.strictEqual(vi2.proxy.port, 8765, 'configEditor 缺席 → 走默认值不抛错');
+assert.strictEqual(vi2.proxy.port, 0, '没有 webServer → 端口 0（代理没挂上），不能编一个 8765 出来');
+assert.strictEqual(vi2.proxy.url, '', '没有 webServer → 没有代理地址');
+assert.strictEqual(vi2.proxy.alive, false, '没有地址就不探活，直接报不在线');
 // 默认值必须落在本包根目录下，不能是作者机器的盘符（发版后别人装上才有意义）
 const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 assert.strictEqual(path.dirname(vi2.sayScript), PKG_ROOT, '默认 sayScript 落在包根');
