@@ -180,14 +180,23 @@ check(/edge\.Source[^\n]*-f\s+\$textFile/.test(ps1b), 'say.ps1 调 edge-tts 要�
 check(/WriteAllText\(\$textFile/.test(ps1b), 'say.ps1 要把文本按 UTF-8 落到临时文件');
 check(/UTF8Encoding\(\$false\)/.test(ps1b), '落盘要用无 BOM 的 UTF-8：带 BOM 第一个字会被读成零宽字符');
 
-const volcSrc = read(path.join(root, 'tts-volc.py'));
-check(/add_argument\("--text-file"\)/.test(volcSrc), 'tts-volc.py 要支持 --text-file');
-check(/add_argument\("--text"\)/.test(volcSrc) && !/add_argument\("--text",\s*required=True\)/.test(volcSrc),
-  '--text 不该还是 required，否则 --text-file 那条路会被 argparse 拦下');
-check(/read_text\(encoding="utf-8-sig"\)/.test(volcSrc), '读文本文件要兼容 BOM（utf-8-sig）');
-check(/"text": text,/.test(volcSrc), '请求体里要用解码后的 text 变量，不能还用 args.text');
+// tts-volc.py 从来没有进过版本库（.gitignore 第 19 行把它挡掉了，它是本机的 Tier 0
+// 复刻音脚本，不带凭据也没法跑）。所以这里只在文件存在时校验，换成 CI 或别的机器
+// 时整段跳过——不能因为本机放了私有脚本就把别人的测试跑红。
+const volcPath = path.join(root, 'tts-volc.py');
+const hasVolc = fs.existsSync(volcPath);
+if (!hasVolc) {
+  console.log('· 跳过 tts-volc.py 校验：本机没有这个脚本（它不在版本库里）');
+} else {
+  const volcSrc = read(volcPath);
+  check(/add_argument\("--text-file"\)/.test(volcSrc), 'tts-volc.py 要支持 --text-file');
+  check(/add_argument\("--text"\)/.test(volcSrc) && !/add_argument\("--text",\s*required=True\)/.test(volcSrc),
+    '--text 不该还是 required，否则 --text-file 那条路会被 argparse 拦下');
+  check(/read_text\(encoding="utf-8-sig"\)/.test(volcSrc), '读文本文件要兼容 BOM（utf-8-sig）');
+  check(/"text": text,/.test(volcSrc), '请求体里要用解码后的 text 变量，不能还用 args.text');
+}
 
-const hasPyAny = spawnSync('python', ['-c', 'import sys'], { windowsHide: true }).status === 0;
+const hasPyAny = hasVolc && spawnSync('python', ['-c', 'import sys'], { windowsHide: true }).status === 0;
 if (!hasPyAny) {
   console.log('· 跳过 tts-volc.py 参数入口验证：没有 python');
 } else {
