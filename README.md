@@ -206,11 +206,17 @@ PYTHONPATH=<你的目录>/engine <你的 python.exe> engine/.scratch/t_session.p
 
 ### say.ps1（语音合成助手）
 
-```powershell
-powershell -NoProfile -File <插件目录>\say.ps1 -Text "要说的话" -Out "$env:TEMP\reply.mp3"
+待合成文本走**标准输入**，只有输出路径进参数：
+
+```bash
+printf '%s' "$text" | powershell -NoProfile -File <插件目录>/say.ps1 -Out "$TEMP/reply.mp3"
 ```
 
-edge-tts 失败（断网/接口抽风）时自动降级为 Windows 离线 SAPI 语音。agent 在会话里用 shell 调用它生成音频文件，然后用 dsh-onebot 的 `qq_send_voice` 工具发送。
+插件内部统一用 `lib/say.js` 的 `runSay({ sayScript, text, out })`，它 spawn 之后把正文写进 stdin，并回读脚本报告的产物路径（成功返回 `{ stdout, produced }`，`produced` 为空表示脚本没报错但没落成文件）。
+
+为什么不让文本进命令行参数：PowerShell 在 `-File` 模式下会把以 `-` 开头的值当成参数名，所以回复里出现 `-Text` / `--text` 这类字样就会报 `Missing an argument for parameter 'Text'`，而三个调用点都在 try/catch 里，表现为「没声音但对话照常继续」。下游的 `tts-volc.py`（argparse）和 `edge-tts`（click）有同样的毛病，所以正文还会落成一个 UTF-8 临时文件，用 `--text-file` / `-f` 传过去，进程退出时清理。老写法 `-Text "..."` 仍然兼容。
+
+五档回退链：火山复刻音 → 配置的 OpenAI 兼容 TTS → 阿里云 qwen-audio-3.0-tts-plus → edge-tts → Windows 离线 SAPI。前四档都要网络，最后一档离线兜底。
 
 ### stt-whisper.py（STT 包装器）
 
