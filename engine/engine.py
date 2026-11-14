@@ -57,6 +57,25 @@ def _find_asset(name: str) -> Path:
             return cand
     return HERE / name
 
+
+# SAPI 离线兜底的 PowerShell 脚本主体：**必须保持为常量**。
+# 待合成文本来自模型回复（外部可控），一旦拼进这段脚本就是命令注入；
+# 所以文本只从标准输入读、输出路径只从环境变量取，脚本里不出现任何外部字符串。
+_SAPI_PS = r"""
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Speech
+$out = $env:CURA_SAPI_OUT
+if (-not $out) { throw 'CURA_SAPI_OUT 未设置' }
+$sr = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), [System.Text.Encoding]::UTF8)
+$text = $sr.ReadToEnd()
+$sr.Dispose()
+$s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+try { $s.SelectVoice('Microsoft Huihui Desktop') } catch {}
+$s.SetOutputToWaveFile($out)
+try { $s.Speak($text) } finally { $s.Dispose() }
+"""
+
+
 # LLM 端点安全基线：默认强制 https + 拒绝私网地址（防 SSRF）。
 # 配置 llm.allowPrivate: true 可放开私网/环回（用于指向本机 DSH 等本地服务）。
 
@@ -653,21 +672,31 @@ class Brain:
             return np.zeros(int(0.5 * target), dtype=np.float32)
 
     def _sapi_pcm(self, text: str, target_sr: int) -> np.ndarray:
-        """Windows 自带 SAPI 语音合成（离线，无需网络）。经 PowerShell 生成 wav 后加载。"""
+        """Windows 自带 SAPI 语音合成（离线，无需网络）。经 PowerShell 生成 wav 后加载。
+
+        安全边界：待合成文本来自模型回复，是外部可控内容，**绝不能拼进 PowerShell 脚本**。
+        所以脚本主体是上面的常量 _SAPI_PS，文本只走标准输入、输出路径只走环境变量，
+        两者都不会被 PowerShell 当代码解析。
+        """
         import subprocess
         import tempfile
         import os
         import soundfile as sf
         out_wav = os.path.join(tempfile.gettempdir(), f"qqcall-sapi-{os.getpid()}.wav")
-        ps_script = (
-            "Add-Type -AssemblyName System.Speech; "
-            "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-            "$s.SetOutputToWaveFile('" + out_wav.replace("\\", "\\\\").replace("'", "''") + "'); "
-            "try { $s.SelectVoice('Microsoft Huihui Desktop') } catch {}; "
-            "$s.Speak(@'\n" + text + "\n'@)"
+        env = dict(os.environ)
+        env["CURA_SAPI_OUT"] = out_wav
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", _SAPI_PS],
+            input=text.encode("utf-8"),
+            env=env,
+            timeout=60,
+            capture_output=True,
         )
-        subprocess.run(["powershell", "-NoProfile", "-Command", ps_script],
-                       timeout=60, capture_output=True)
+        if proc.returncode != 0:
+            # 出声失败就如实抛，让 synthesize() 记 error 并回 0.5s 静音；
+            # 不要拿一个可能不存在的 wav 去 read 出更难懂的 IOError。
+            detail = proc.stderr.decode("utf-8", "replace").strip()[:300]
+            raise RuntimeError(f"SAPI 兜底失败 rc={proc.returncode}: {detail}")
         audio, sr = sf.read(out_wav, dtype="float32")
         os.remove(out_wav)
         if audio.ndim > 1:

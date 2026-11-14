@@ -18,6 +18,8 @@ const SUITES = [
   ['luckin', 'test-luckin.mjs'],
   ['remote', 'test-remote.mjs'],
   ['release-body', 'test-release-body.mjs'],
+  // 真起 PowerShell 的放最后：Windows 上跑得慢，CI（ubuntu）上会自我跳过动态段。
+  ['tts-inject', 'test-tts-inject.mjs'],
 ];
 
 const only = process.argv.slice(2);
